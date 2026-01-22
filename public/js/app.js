@@ -1,5 +1,5 @@
 /**
- * HADES
+ * Effect Workspace
  * Main application entry point
  * 
  * A pure effects editor with hot reload - no AI components
@@ -7,7 +7,7 @@
 
 import { ShadeRenderer } from './noisemaker/index.js'
 import { workspaceStore, saveWorkspace, loadWorkspace, registerEffectFromWorkspace } from './workspace/index.js'
-import { FileBrowser, ParamControls, SavedEffects, keyboard, toast, helpModal, aboutModal, nameDialog, CodeEditor } from './ui/index.js'
+import { FileBrowser, ParamControls, SavedEffects, keyboard, toast, helpModal, aboutModal, nameDialog, CodeEditor, deleteEffectDialog } from './ui/index.js'
 import { OpenEffectDialog } from './ui/open-effect-dialog.js'
 import { WorkspaceFilesDialog } from './ui/workspace-files-dialog.js'
 import { shareModal } from './ui/share-modal.js'
@@ -36,8 +36,8 @@ solid(
   b: 0
 )
   .text(
-    text: "H A D E S",
-    font: "Audiowide",
+    text: "EffectWorkspace",
+    font: "Nunito",
     size: 0.14,
     color: #c3c3c3
   )
@@ -81,6 +81,13 @@ function updateLoadingStatus(status) {
     }
 }
 
+function updateMenuFilename() {
+    const menuFilenameEl = document.getElementById('menuFilename')
+    if (menuFilenameEl) {
+        menuFilenameEl.textContent = canvasEditorCurrentFile || 'dsl.txt'
+    }
+}
+
 function hideLoadingScreen() {
     if (!loadingScreen) return
     
@@ -116,6 +123,7 @@ const canvasEditor = document.getElementById('canvas-editor')
 const compilerErrorEl = document.getElementById('compiler-error')
 const saveEffectOverlayBtn = document.getElementById('save-effect-overlay-btn')
 const agentStatus = document.getElementById('agent-status')
+const menuFilename = document.getElementById('menuFilename')
 
 // =========================================================================
 // State
@@ -126,7 +134,7 @@ let pausedTime = 0
 let currentEffect = null
 let performancePauseGraceEnd = 0
 let activeBottomLeftOverlay = null
-let canvasEditorVisible = true // Visible by default in HADES
+let canvasEditorVisible = true // Visible by default in Effect Workspace
 let canvasEditorCurrentFile = 'dsl.txt'
 
 // Editor hot reload state
@@ -208,8 +216,16 @@ if (savedEffectsContainer) {
             if (dsl) {
                 dslEditor.value = dsl
                 if (canvasEditor) {
-                    canvasEditor.value = dsl
-                    canvasEditorCurrentFile = 'dsl.txt'
+                    // Open definition.json when loading an effect
+                    const defContent = store.getFile('definition.json')
+                    if (defContent) {
+                        canvasEditor.value = defContent
+                        canvasEditorCurrentFile = 'definition.json'
+                    } else {
+                        canvasEditor.value = dsl
+                        canvasEditorCurrentFile = 'dsl.txt'
+                    }
+                    updateMenuFilename()
                 }
                 await compileAndRun()
             }
@@ -273,7 +289,7 @@ const renderer = new ShadeRenderer(canvas, {
 })
 
 // Expose renderer for debugging
-window.hadesRenderer = renderer
+window.effectWorkspaceRenderer = renderer
 
 // Set renderer on SavedEffects
 if (savedEffects) {
@@ -310,12 +326,10 @@ const workspaceFilesDialog = new WorkspaceFilesDialog()
 
 // Set up the callback for when a file is selected
 workspaceFilesDialog.onFileSelect((filePath) => {
-    if (isFileEditable(filePath)) {
-        if (!canvasEditorVisible) {
-            toggleCanvasEditor()
-        }
-        switchEditorFile(filePath)
+    if (!canvasEditorVisible) {
+        toggleCanvasEditor()
     }
+    switchEditorFile(filePath)
 })
 
 /**
@@ -362,9 +376,18 @@ async function loadEffectToWorkspace(effectId, newName) {
 
         workspaceStore.clear()
         workspaceStore.name = name
+        updateMenuFilename()
 
-        // Get manifest info for starter/hasTex
+        // Get manifest info for starter/hasTex - check instance first, then manifest
         const manifestEntry = renderer.getEffectManifest(effectId) || {}
+        
+        // Determine starter/hasTex: instance takes priority over manifest
+        const isStarter = instance.starter !== undefined 
+            ? instance.starter === true 
+            : manifestEntry.starter === true
+        const hasTex = instance.hasTex !== undefined 
+            ? instance.hasTex === true 
+            : manifestEntry.hasTex === true
 
         const definitionMeta = {
             name: instance.name,
@@ -376,8 +399,11 @@ async function loadEffectToWorkspace(effectId, newName) {
             globals: instance.globals || {},
             passes: instance.passes || [],  // Preserve pass structure
             textures: instance.textures || {},  // Preserve texture specs
-            starter: manifestEntry.starter === true,
-            hasTex: manifestEntry.hasTex === true
+            starter: isStarter,
+            hasTex: hasTex,
+            // 3D effect properties
+            outputTex3d: instance.outputTex3d || null,
+            outputGeo: instance.outputGeo || null
         }
         workspaceStore.setFile('definition.json', JSON.stringify(definitionMeta, null, 2))
 
@@ -408,20 +434,30 @@ async function loadEffectToWorkspace(effectId, newName) {
 
         let dsl = renderer.buildDslSource(effect)
         if (dsl) {
-            // Replace the original namespace with 'user' in search directive
-            const originalNamespace = effect.namespace
-            if (originalNamespace && originalNamespace !== 'user') {
-                // Replace namespace in search directive: "search ns1, ns2" -> "search user, ns2"
-                dsl = dsl.replace(
-                    new RegExp(`(search\\s+)${originalNamespace}(\\s*,|\\s*\\n)`, 'g'),
-                    `$1user$2`
-                )
+            // Add 'user' to the search directive while preserving original namespaces
+            const searchMatch = dsl.match(/^search\s+(.+)$/m)
+            if (searchMatch) {
+                const namespaces = searchMatch[1].split(',').map(s => s.trim())
+                if (!namespaces.includes('user')) {
+                    // Add 'user' to the beginning of the search directive
+                    const newSearch = `search user, ${namespaces.join(', ')}`
+                    dsl = dsl.replace(/^search\s+.+$/m, newSearch)
+                }
             }
             // Save DSL to workspace
             workspaceStore.setFile('dsl.txt', dsl)
             dslEditor.value = dsl
             if (canvasEditor) {
-                canvasEditor.value = dsl
+                // Open definition.json when importing an effect
+                const defContent = workspaceStore.getFile('definition.json')
+                if (defContent) {
+                    canvasEditor.value = defContent
+                    canvasEditorCurrentFile = 'definition.json'
+                } else {
+                    canvasEditor.value = dsl
+                    canvasEditorCurrentFile = 'dsl.txt'
+                }
+                updateMenuFilename()
             }
         }
 
@@ -508,6 +544,8 @@ function switchEditorFile(filePath) {
     
     saveCurrentEditorContent()
     canvasEditorCurrentFile = filePath
+    updateMenuFilename()
+    saveUIState({ lastOpenedFile: filePath })
     
     if (filePath === 'dsl.txt') {
         canvasEditor.value = dslEditor?.value || ''
@@ -533,10 +571,12 @@ function saveCurrentEditorContent() {
     
     const content = canvasEditor.value
     
+    // Always save to workspace store
     if (canvasEditorCurrentFile === 'dsl.txt') {
         if (dslEditor) {
             dslEditor.value = content
         }
+        workspaceStore.setFile('dsl.txt', content)
     } else {
         workspaceStore.setFile(canvasEditorCurrentFile, content)
     }
@@ -548,10 +588,12 @@ async function recompileFromEditor() {
     const currentFile = canvasEditorCurrentFile
     const content = canvasEditor.value
     
+    // Always save the file to workspace store
     if (currentFile === 'dsl.txt') {
         if (dslEditor) {
             dslEditor.value = content
         }
+        workspaceStore.setFile('dsl.txt', content)
     } else {
         workspaceStore.setFile(currentFile, content)
     }
@@ -607,6 +649,7 @@ function toggleCanvasEditor() {
     
     if (isHidden && canvasEditor) {
         canvasEditorCurrentFile = 'dsl.txt'
+        updateMenuFilename()
         canvasEditor.value = dslEditor?.value || ''
         canvasEditor.focus()
     }
@@ -744,9 +787,9 @@ async function init() {
         if (document.fonts && document.fonts.ready) {
             await document.fonts.ready
             try {
-                await document.fonts.load('400 48px Audiowide')
+                await document.fonts.load('500 48px Nunito')
             } catch (e) {
-                console.warn('[Fonts] Could not preload Audiowide:', e)
+                console.warn('[Fonts] Could not preload Nunito:', e)
             }
         }
         
@@ -765,7 +808,7 @@ async function init() {
         
         paramControls.setProgramState(renderer.programState, 'step_0')
         
-        console.log('HADES initialized')
+        console.log('Effect Workspace initialized')
         console.log(`Loaded ${renderer.getEffectIds().length} effects from manifest`)
         
         // Populate effect list for dialog (will be updated with user effects later)
@@ -782,6 +825,7 @@ async function init() {
             console.log('Restored workspace from IndexedDB')
             registerEffectFromWorkspace(renderer)
             fileBrowser.render()
+            updateMenuFilename()
             
             let dsl = workspaceStore.getFile('dsl.txt')
             
@@ -819,6 +863,7 @@ async function init() {
                 if (canvasEditor) {
                     canvasEditor.value = dsl
                     canvasEditorCurrentFile = 'dsl.txt'
+                    updateMenuFilename()
                 }
                 await compileAndRun()
                 renderer.start()
@@ -848,7 +893,17 @@ async function init() {
         
         // Sync to canvas editor
         if (canvasEditor) {
-            canvasEditor.value = dslEditor.value
+            // Restore last opened file
+            const lastFile = uiState.lastOpenedFile || 'dsl.txt'
+            const lastFileContent = lastFile === 'dsl.txt' ? dslEditor.value : workspaceStore.getFile(lastFile)
+            if (lastFileContent) {
+                canvasEditor.value = lastFileContent
+                canvasEditorCurrentFile = lastFile
+            } else {
+                canvasEditor.value = dslEditor.value
+                canvasEditorCurrentFile = 'dsl.txt'
+            }
+            updateMenuFilename()
         }
 
         updateLoadingStatus('Compiling shaders')
@@ -888,10 +943,11 @@ async function init() {
         // Populate dialog with library + user effects
         await refreshEffectDialog()
 
+        updateMenuFilename()
         hideLoadingScreen()
         
         setTimeout(() => {
-            toast.success('HADES ready')
+            toast.success('Effect Workspace ready')
         }, 500)
     } catch (err) {
         handleError(err, ErrorType.UNKNOWN)
@@ -955,6 +1011,12 @@ function registerKeyboardShortcuts() {
                 showBottomLeftOverlay(null)
                 document.activeElement?.blur()
             }
+        },
+        {
+            key: 'p',
+            meta: true,
+            description: 'Open workspace files',
+            action: () => workspaceFilesDialog.open()
         }
     ])
 }
@@ -1049,6 +1111,19 @@ function setupMenuBar() {
                 await refreshEffectDialog()
                 toast.success(`Saved: ${name}`)
             }
+        })
+    }
+
+    // Delete effect workspace menu item
+    const deleteEffectMenuItem = document.getElementById('deleteEffectMenuItem')
+    if (deleteEffectMenuItem) {
+        deleteEffectMenuItem.addEventListener('click', () => {
+            menu.querySelectorAll('.menu-items').forEach(el => el.classList.add('hide'))
+            deleteEffectDialog.onEffectDelete(async () => {
+                await refreshEffectDialog()
+                toast.success('Effect deleted')
+            })
+            deleteEffectDialog.open()
         })
     }
 
@@ -1224,7 +1299,7 @@ async function handleExport() {
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = `${workspaceStore.name || 'hades-effect'}.zip`
+        a.download = `${workspaceStore.name || 'effect-workspace'}.zip`
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)
@@ -1236,18 +1311,37 @@ async function handleExport() {
     }
 }
 
-// Open in Noisedeck
-const SHARE_API_URL = 'https://sharing.noisedeck.app/share'
-const NOISEDECK_URL = 'https://noisedeck.app'
+// Edit in Noisedeck
+const SHARE_API_URL = 'https://sharing.noisedeck.app/api/embed/shorten'
+const NOISEDECK_URL = 'https://preview.noisedeck.app'
 
+/**
+ * Share the effect and open Noisedeck in a new window
+ */
 async function handleEditInNoisedeck() {
-    const dsl = dslEditor.value
+    // Get DSL with current parameter values
+    let dsl = dslEditor.value
     if (!dsl) {
-        toast.warning('No DSL to export')
+        toast.warning('Nothing to edit. Create an effect first!')
         return
     }
     
+    // Try to get DSL with current param values from programState
+    if (renderer?.programState?.toDsl) {
+        try {
+            const dslWithParams = renderer.programState.toDsl()
+            if (dslWithParams && dslWithParams.trim()) {
+                dsl = dslWithParams
+            }
+        } catch (err) {
+            console.warn('[Noisedeck] Failed to get DSL from programState:', err)
+        }
+    }
+    
+    toast.info('Opening in Noisedeck...')
+    
     try {
+        // Capture screenshot
         let screenshot = null
         try {
             const targetWidth = 1200
@@ -1276,14 +1370,53 @@ async function handleEditInNoisedeck() {
             console.warn('[Noisedeck] Screenshot capture failed:', err)
         }
         
+        // Create effect ZIP if we have workspace files
+        let effectZip = null
+        const files = workspaceStore.toObject()
+        const defJson = files['definition.json']
+        const glslFiles = Object.keys(files).filter(p => p.startsWith('glsl/') && p.endsWith('.glsl'))
+        
+        if (defJson && glslFiles.length > 0) {
+            try {
+                // Load JSZip if needed
+                if (!window.JSZip) {
+                    await new Promise((resolve, reject) => {
+                        const script = document.createElement('script')
+                        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'
+                        script.onload = resolve
+                        script.onerror = () => reject(new Error('Failed to load JSZip'))
+                        document.head.appendChild(script)
+                    })
+                }
+                
+                const zip = new window.JSZip()
+                zip.file('definition.json', defJson)
+                for (const path of glslFiles) {
+                    zip.file(path, files[path])
+                }
+                const zipBlob = await zip.generateAsync({ type: 'blob' })
+                const reader = new FileReader()
+                effectZip = await new Promise((resolve, reject) => {
+                    reader.onload = () => resolve(reader.result.split(',')[1])
+                    reader.onerror = reject
+                    reader.readAsDataURL(zipBlob)
+                })
+            } catch (err) {
+                console.warn('[Noisedeck] Effect ZIP creation failed:', err)
+            }
+        }
+        
+        // Build payload
         const payload = {
             dsl,
-            title: workspaceStore.name || 'HADES Effect',
-            description: 'Created with HADES',
+            title: workspaceStore.name || 'Effect Workspace',
+            description: 'Created with Effect Workspace',
             ttlMinutes: 60
         }
         if (screenshot) payload.screenshot = screenshot
+        if (effectZip) payload.effects = [effectZip]
         
+        // Upload to sharing service
         const response = await fetch(SHARE_API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1296,6 +1429,9 @@ async function handleEditInNoisedeck() {
         }
         
         const result = await response.json()
+        console.log('[Noisedeck] Share result:', result)
+        
+        // Open Noisedeck with the short code
         const noisedeckUrl = `${NOISEDECK_URL}/?code=${result.code}`
         window.open(noisedeckUrl, '_blank')
         
@@ -1325,7 +1461,7 @@ init().then(() => {
 })
 
 // Expose for debugging
-window.hades = {
+window.effectWorkspace = {
     renderer,
     workspaceStore,
     loadEffect: loadEffectToWorkspace,

@@ -1,5 +1,5 @@
 /**
- * HADES Components
+ * Effect Workspace Components
  * Toast, Modal, and other UI components
  */
 
@@ -128,7 +128,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 9999;
+    z-index: 10001;
     opacity: 0;
     transition: opacity var(--transition-normal);
 }
@@ -248,6 +248,72 @@
     border-top: 1px solid var(--color-border-muted);
 }
 
+/* Confirm Dialog */
+.confirm-modal {
+    max-width: 380px;
+    text-align: center;
+}
+
+.confirm-modal-content {
+    padding: 32px 24px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}
+
+.confirm-modal-icon {
+    width: 56px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: rgba(255, 107, 107, 0.15);
+}
+
+.confirm-modal-icon .icon-material {
+    font-size: 28px;
+    color: var(--color-error);
+}
+
+.confirm-modal-title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+}
+
+.confirm-modal-message {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--color-text-secondary);
+}
+
+.confirm-modal-actions {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    width: 100%;
+    margin-top: 8px;
+}
+
+.confirm-modal-actions .action-btn {
+    min-width: 100px;
+}
+
+.action-btn.danger {
+    background: linear-gradient(180deg, var(--color-error) 0%, #e05555 100%);
+    color: #fff;
+    font-weight: 600;
+}
+
+.action-btn.danger:hover {
+    background: linear-gradient(180deg, #ff8080 0%, var(--color-error) 100%);
+    box-shadow: 0 0 20px rgba(255, 107, 107, 0.4);
+}
+
 /* Shortcuts table */
 .shortcuts-table {
     width: 100%;
@@ -361,26 +427,13 @@
     width: min(720px, 100vw);
     max-width: 720px;
     min-width: 360px;
-    background-color: var(--color-bg-elevated);
+    background: var(--color-glass);
     border: none;
     padding: 0;
     position: relative;
     overflow: hidden;
-    border-radius: var(--radius-xl) var(--radius-xl) 0 var(--radius-xl);
-}
-
-.about-modal::after {
-    content: '';
-    position: absolute;
-    width: 48px;
-    height: 48px;
-    bottom: -1px;
-    right: -1px;
-    border-bottom: 2px solid var(--color-accent);
-    border-right: 2px solid var(--color-accent);
-    pointer-events: none;
-    z-index: 1;
-    opacity: 0.6;
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-xl), var(--shadow-glow);
 }
 
 .about-modal-content {
@@ -422,17 +475,17 @@
 }
 
 .about-modal-title {
-    font-family: var(--font-display);
-    font-weight: 400;
-    font-size: clamp(2.4rem, 5vw, 3rem);
-    letter-spacing: 0.05em;
+    font-family: var(--font-logotype);
+    font-weight: 700;
+    font-size: clamp(2rem, 4vw, 2.5rem);
     color: var(--color-text-primary);
-    text-shadow: 0 0 20px var(--color-accent);
+    text-shadow: 
+        0 0 40px rgba(0, 212, 255, 0.4),
+        0 0 80px rgba(0, 212, 255, 0.2);
 }
 
 .about-modal-tagline {
     font-size: 1rem;
-    letter-spacing: 0.02em;
     color: var(--color-accent);
 }
 

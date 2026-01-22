@@ -3,7 +3,7 @@
 Pull noisemaker from GitHub, build bundles, and copy to vendor directory.
 
 This script clones the noisemaker repository, builds the ESM bundles,
-and copies the necessary files to the vendor directory for HADES.
+and copies the necessary files to the vendor directory for Effect Workspace.
 
 Usage:
     ./pull-noisemaker                    # Clone from default branch

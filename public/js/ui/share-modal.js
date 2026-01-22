@@ -261,8 +261,8 @@ export class ShareModal {
             
             const payload = {
                 dsl,
-                title: title || workspaceStore.name || 'HADES Effect',
-                description: description || 'Created with HADES'
+                title: title || workspaceStore.name || 'Effect Workspace',
+                description: description || 'Created with Effect Workspace'
             }
 
             if (screenshot) {
@@ -368,7 +368,7 @@ export class ShareModal {
      * @private
      */
     _createModal() {
-        const effectName = workspaceStore.name || 'HADES Effect'
+        const effectName = workspaceStore.name || 'Effect Workspace'
 
         this.modal = document.createElement('div')
         this.modal.className = 'modal-overlay'

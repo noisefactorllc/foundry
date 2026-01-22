@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HADES — Hot-reload Effects Editor</title>
+    <title>Effect Workspace — Hot-reload Effects Editor</title>
     <meta name="description" content="Hot-reload DSL effects editor. Real-time shader editing with WebGL2/WebGPU.">
     <meta name="keywords" content="GPU, GLSL, WebGPU, shader, effects, hot-reload, DSL">
     <!-- Preload fonts -->
-    <link rel="preload" href="/fonts/Audiowide-Regular.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="/fonts/Nunito.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="https://fonts.noisedeck.app/fonts/nunito/Nunito[wght].woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="css/fonts.css">
     <link rel="stylesheet" href="css/colors.css">
     <link rel="stylesheet" href="css/menu.css">
@@ -22,11 +22,8 @@
     <!-- Loading Screen -->
     <div id="loading-screen">
         <div class="loading-modal">
-            <div class="loading-grid"></div>
-            <div class="loading-grid-overlay"></div>
-            <div class="loading-scanline"></div>
             <div class="loading-brand">
-                <h1 class="loading-title">HADES</h1>
+                <h1 class="loading-title"><span>Effect</span><span>Workspace</span></h1>
                 <p class="loading-tagline">Hot-reload Effects Editor</p>
                 <div class="loading-status">
                     <div class="loading-spinner"></div>
@@ -77,7 +74,7 @@
                         </svg>
                     </div>
                     <div class="menu-items hide">
-                        <div id="aboutMenuItem">about HADES</div>
+                        <div id="aboutMenuItem">about Effect Workspace</div>
                     </div>
                 </div>
                 <div class="menu">
@@ -85,14 +82,10 @@
                     <div class="menu-items hide">
                         <div id="workspaceFilesMenuItem">workspace files</div>
                         <div id="saveEffectMenuItem">save effect workspace</div>
+                        <div id="deleteEffectMenuItem">delete effect workspace...</div>
                         <div id="downloadWorkspaceMenuItem">download workspace files</div>
                         <hr class="menu-seperator">
                         <div id="importFromLibraryMenuItem">import effect from library...</div>
-                    </div>
-                </div>
-                <div class="menu">
-                    <div class="menu-title">edit</div>
-                    <div class="menu-items hide">
                     </div>
                 </div>
                 <div class="menu">
@@ -104,6 +97,9 @@
                         <div id="sharePubliclyMenuItem">share publicly...</div>
                     </div>
                 </div>
+            </div>
+            <div id="menuCenter">
+                <span id="menuFilename">untitled</span>
             </div>
             <div id="menuRight">
                 <button id="toggle-dsl-overlay" class="menu-icon-btn icon-material active" title="Show DSL" aria-label="Toggle DSL code">code</button>
@@ -155,7 +151,7 @@
                     </div>
                 </div>
                 
-                <!-- Canvas Code Editor (visible by default for HADES) -->
+                <!-- Canvas Code Editor (visible by default for Effect Workspace) -->
                 <code-editor id="canvas-editor" line-numbers="true" placeholder="Enter DSL code here..."></code-editor>
                 
                 <!-- Compiler Error Display -->

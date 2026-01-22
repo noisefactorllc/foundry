@@ -1,8 +1,6 @@
-# HADES
+# Effect Workspace
 
-**H**ot-reload **A**bstract **D**SL **E**ffects **S**ystem
-
-A pure effects editor with hot reload capability. Fork of Shade with AI features removed.
+A pure effects editor with hot reload capability.
 
 ## Features
 
@@ -16,7 +14,7 @@ A pure effects editor with hot reload capability. Fork of Shade with AI features
 ## Quick Start
 
 ```bash
-cd hades
+cd workspace
 
 # First-time setup: Run the setup script to create symlinks
 chmod +x setup.sh
@@ -45,7 +43,7 @@ Open http://localhost:3000 in your browser.
 ## Architecture
 
 ```
-hades/
+workspace/
 ├── server/
 │   └── index.js          # Express static server
 │

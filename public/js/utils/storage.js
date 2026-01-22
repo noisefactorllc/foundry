@@ -222,6 +222,7 @@ export function addRecentEffect(id, name) {
  * @typedef {Object} UIState
  * @property {string} dsl - Last DSL code
  * @property {boolean} sidebarCollapsed - Sidebar state
+ * @property {string} lastOpenedFile - Last opened file path
  */
 
 /**
@@ -240,6 +241,7 @@ export function saveUIState(state) {
 export function loadUIState() {
     return storage.get(StorageKey.UI_STATE, {
         dsl: '',
-        sidebarCollapsed: false
+        sidebarCollapsed: false,
+        lastOpenedFile: 'dsl.txt'
     })
 }

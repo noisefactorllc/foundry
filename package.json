@@ -1,7 +1,7 @@
 {
-  "name": "hades",
+  "name": "effect-workspace",
   "version": "0.1.0",
-  "description": "Hot-reload effects editor - Fork of Shade without AI",
+  "description": "Hot-reload effects editor",
   "type": "module",
   "main": "server/index.js",
   "scripts": {

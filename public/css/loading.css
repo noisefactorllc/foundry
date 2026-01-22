@@ -1,6 +1,6 @@
 /**
- * HADES Loading Screen
- * Animated grid with centered branding
+ * Effect Workspace Loading Screen
+ * Centered branding
  */
 
 /* Loading overlay */
@@ -32,66 +32,13 @@
     height: 280px;
     background: var(--color-glass);
     border: none;
-    border-radius: var(--radius-xl) var(--radius-xl) 0 var(--radius-xl);
+    border-radius: var(--radius-xl);
     box-shadow: var(--shadow-xl), var(--shadow-glow);
     overflow: hidden;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-}
-
-/* Animated grid background */
-.loading-grid {
-    position: absolute;
-    inset: 0;
-    overflow: hidden;
-    border-radius: var(--radius-xl) var(--radius-xl) 0 var(--radius-xl);
-    pointer-events: none;
-}
-
-.loading-grid::before,
-.loading-grid::after {
-    content: '';
-    position: absolute;
-    inset: -50%;
-    background-image: 
-        linear-gradient(var(--grid-line) 1px, transparent 1px),
-        linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
-    background-size: 40px 40px;
-    animation: grid-scroll 20s linear infinite;
-}
-
-.loading-grid::after {
-    background-image: 
-        linear-gradient(var(--grid-line-accent) 1px, transparent 1px),
-        linear-gradient(90deg, var(--grid-line-accent) 1px, transparent 1px);
-    background-size: 80px 80px;
-    animation: grid-scroll-slow 30s linear infinite;
-    opacity: 0.5;
-}
-
-@keyframes grid-scroll {
-    0% { transform: translate(0, 0); }
-    100% { transform: translate(40px, 40px); }
-}
-
-@keyframes grid-scroll-slow {
-    0% { transform: translate(0, 0); }
-    100% { transform: translate(80px, 80px); }
-}
-
-/* Gradient overlay on grid */
-.loading-grid-overlay {
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(
-        ellipse at center,
-        transparent 0%,
-        var(--color-glass) 70%,
-        var(--color-bg-elevated) 100%
-    );
-    pointer-events: none;
 }
 
 /* Brand text */
@@ -102,17 +49,23 @@
 }
 
 .loading-title {
-    font-family: var(--font-display);
-    font-size: 48px;
-    font-weight: 400;
-    letter-spacing: 0.4em;
-    text-indent: 0.4em;
+    font-family: var(--font-logotype);
+    font-size: 36px;
+    font-weight: 700;
     color: var(--color-text-primary);
     margin: 0;
     text-shadow: 
         0 0 40px rgba(0, 212, 255, 0.4),
         0 0 80px rgba(0, 212, 255, 0.2);
     animation: title-glow 3s ease-in-out infinite alternate;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1.1;
+}
+
+.loading-title span {
+    display: block;
 }
 
 @keyframes title-glow {
@@ -133,7 +86,6 @@
     font-family: var(--font-body);
     font-size: 11px;
     font-weight: 400;
-    letter-spacing: 0.25em;
     text-transform: uppercase;
     color: var(--color-text-muted);
     margin: 8px 0 0;
@@ -146,7 +98,6 @@
     font-family: var(--font-body);
     font-size: 13px;
     color: var(--color-text-muted);
-    letter-spacing: 0.1em;
     text-transform: uppercase;
     display: flex;
     align-items: center;
@@ -164,20 +115,6 @@
 
 @keyframes spin {
     to { transform: rotate(360deg); }
-}
-
-/* Corner accent - bottom right only */
-.loading-modal::after {
-    content: '';
-    position: absolute;
-    width: 60px;
-    height: 60px;
-    pointer-events: none;
-    bottom: -1px;
-    right: -1px;
-    border-bottom: 2px solid var(--color-accent);
-    border-right: 2px solid var(--color-accent);
-    opacity: 0.6;
 }
 
 /* Scan line effect (subtle) */

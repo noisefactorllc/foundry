@@ -1,5 +1,5 @@
 /**
- * HADES Server
+ * Effect Workspace Server
  * Minimal server - just static file serving
  */
 
@@ -62,7 +62,7 @@ app.use(express.static(join(__dirname, '../public'), {
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok', service: 'hades' });
+    res.json({ status: 'ok', service: 'effect-workspace' });
 });
 
 // =========================================================================
@@ -73,13 +73,7 @@ app.listen(PORT, HOST, () => {
     console.log(`
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
-║   ██╗  ██╗ █████╗ ██████╗ ███████╗███████╗               ║
-║   ██║  ██║██╔══██╗██╔══██╗██╔════╝██╔════╝               ║
-║   ███████║███████║██║  ██║█████╗  ███████╗               ║
-║   ██╔══██║██╔══██║██║  ██║██╔══╝  ╚════██║               ║
-║   ██║  ██║██║  ██║██████╔╝███████╗███████║               ║
-║   ╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝ ╚══════╝╚══════╝               ║
-║                                                           ║
+║   Effect Workspace                                        ║
 ║   Hot-reload Effects Editor                               ║
 ║   http://${HOST}:${PORT}                                      ║
 ║                                                           ║

@@ -42,17 +42,23 @@ export function registerEffectFromWorkspace(renderer = null) {
         
         const globals = def.globals || {}
 
-        // Migrate old workspaces: update dsl.txt to use 'user' namespace
+        // Migrate old workspaces: ensure 'user' namespace is in search directive
         const originalNamespace = def.originalNamespace || def.namespace
         if (originalNamespace && originalNamespace !== 'user') {
             let dsl = workspaceStore.getFile('dsl.txt')
-            if (dsl && dsl.includes(`search ${originalNamespace}`)) {
-                dsl = dsl.replace(
-                    new RegExp(`(search\\s+)${originalNamespace}(\\s*,|\\s*\\n)`, 'g'),
-                    `$1user$2`
-                )
-                workspaceStore.setFile('dsl.txt', dsl)
-                console.log('[Workspace] Migrated dsl.txt to use user namespace')
+            if (dsl) {
+                // Check if 'user' is already in the search directive
+                const searchMatch = dsl.match(/^search\s+(.+)$/m)
+                if (searchMatch) {
+                    const namespaces = searchMatch[1].split(',').map(s => s.trim())
+                    if (!namespaces.includes('user')) {
+                        // Add 'user' to the beginning of the search directive
+                        const newSearch = `search user, ${namespaces.join(', ')}`
+                        dsl = dsl.replace(/^search\s+.+$/m, newSearch)
+                        workspaceStore.setFile('dsl.txt', dsl)
+                        console.log('[Workspace] Added user to dsl.txt search directive')
+                    }
+                }
             }
             // Also update definition.json namespace
             if (def.namespace !== 'user') {
@@ -159,7 +165,10 @@ export function registerEffectFromWorkspace(renderer = null) {
             shaders,
             textures: def.textures || {},
             uniformLayout: def.uniformLayout,
-            uniformLayouts: def.uniformLayouts
+            uniformLayouts: def.uniformLayouts,
+            // 3D effect properties
+            outputTex3d: def.outputTex3d || null,
+            outputGeo: def.outputGeo || null
         }
 
         // Register the effect with the global registry under multiple keys

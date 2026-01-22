@@ -177,12 +177,10 @@ export class AboutModal {
             <div class="modal-content about-modal">
                 <div class="about-modal-content">
                     <div class="about-modal-graphic" role="presentation">
-                        <img class="about-modal-logo" src="/img/logo.png" alt="Hades logo">
+                        <img class="about-modal-logo" src="/img/logo.png" alt="Effect Workspace logo">
                     </div>
                     <div class="about-modal-details" tabindex="-1">
-                        <div class="about-modal-title" id="about-modal-title">H A D E S</div>
-                        <div class="about-modal-tagline">GPU Visual Programming</div>
-                        <div class="about-modal-authors">Alex Ayars</div>
+                        <div class="about-modal-title" id="about-modal-title">Effect Workspace</div>
                         <div class="about-modal-copyright">&copy; 2026 <a href="https://noisefactor.io/" class="about-modal-link" target="_blank" rel="noopener">Noise Factor LLC.</a></div>
                         <div class="about-modal-build">${defaultBuildInfo}</div>
                     </div>

@@ -1,17 +1,17 @@
 #!/bin/bash
 
-# HADES Setup Script
+# Effect Workspace Setup Script
 # Copies required resources from shade/
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SHADE_DIR="$SCRIPT_DIR/../shade"
 
-echo "Setting up HADES..."
+echo "Setting up Effect Workspace..."
 
 # Check if shade directory exists
 if [ ! -d "$SHADE_DIR" ]; then
     echo "Error: shade/ directory not found at $SHADE_DIR"
-    echo "Make sure shade/ is in the same parent directory as hades/"
+    echo "Make sure shade/ is in the same parent directory as workspace/"
     exit 1
 fi
 
@@ -49,4 +49,4 @@ cp "$SHADE_DIR/public/img/logo.png" "$SCRIPT_DIR/public/img/"
 echo "  ✓ img"
 
 echo ""
-echo "Setup complete! Run 'npm install && npm start' to launch HADES."
+echo "Setup complete! Run 'npm install && npm start' to launch Effect Workspace."
