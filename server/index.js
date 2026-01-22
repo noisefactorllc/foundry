@@ -1,5 +1,5 @@
 /**
- * HADES - Hot-reload Abstract DSL Effects System
+ * HADES Server
  * Minimal server - just static file serving
  */
 

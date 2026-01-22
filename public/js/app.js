@@ -1,5 +1,5 @@
 /**
- * HADES - Hot-reload Abstract DSL Effects System
+ * HADES
  * Main application entry point
  * 
  * A pure effects editor with hot reload - no AI components
@@ -7,7 +7,7 @@
 
 import { ShadeRenderer } from './noisemaker/index.js'
 import { workspaceStore, saveWorkspace, loadWorkspace, registerEffectFromWorkspace } from './workspace/index.js'
-import { FileBrowser, ParamControls, SavedEffects, keyboard, toast, helpModal, aboutModal, nameDialog } from './ui/index.js'
+import { FileBrowser, ParamControls, SavedEffects, keyboard, toast, helpModal, aboutModal, nameDialog, CodeEditor } from './ui/index.js'
 import { 
     errorHandler, 
     handleError,
@@ -117,8 +117,7 @@ const savedOverlay = document.getElementById('saved-overlay')
 const workspaceOverlay = document.getElementById('workspace-overlay')
 const canvasEditor = document.getElementById('canvas-editor')
 const workspaceOverlayContent = document.getElementById('workspace-overlay-content')
-const canvasEditorTextarea = document.getElementById('canvas-editor-textarea')
-const canvasEditorDisplay = document.getElementById('canvas-editor-display')
+// canvasEditor is now a <code-editor> web component with .value property
 const compilerErrorEl = document.getElementById('compiler-error')
 const saveEffectOverlayBtn = document.getElementById('save-effect-overlay-btn')
 const agentStatus = document.getElementById('agent-status')
@@ -175,9 +174,8 @@ function updateDslEditorFromState() {
             const dslWithParams = renderer.programState.toDsl()
             if (dslWithParams && dslWithParams.trim()) {
                 dslEditor.value = dslWithParams
-                if (canvasEditorTextarea && canvasEditorCurrentFile === 'dsl.txt') {
-                    canvasEditorTextarea.value = dslWithParams
-                    syncEditorDisplay()
+                if (canvasEditor && canvasEditorCurrentFile === 'dsl.txt') {
+                    canvasEditor.value = dslWithParams
                 }
             }
         } catch (err) {
@@ -218,10 +216,9 @@ if (savedEffectsContainer) {
             
             if (dsl) {
                 dslEditor.value = dsl
-                if (canvasEditorTextarea) {
-                    canvasEditorTextarea.value = dsl
+                if (canvasEditor) {
+                    canvasEditor.value = dsl
                     canvasEditorCurrentFile = 'dsl.txt'
-                    syncEditorDisplay()
                 }
                 await compileAndRun()
             }
@@ -384,9 +381,8 @@ async function loadEffectToWorkspace(effectId, newName) {
         const dsl = renderer.buildDslSource(effect)
         if (dsl) {
             dslEditor.value = dsl
-            if (canvasEditorTextarea) {
-                canvasEditorTextarea.value = dsl
-                syncEditorDisplay()
+            if (canvasEditor) {
+                canvasEditor.value = dsl
             }
         }
 
@@ -511,19 +507,7 @@ function hideCompilerError() {
     compilerErrorEl.classList.remove('visible')
 }
 
-function syncEditorDisplay() {
-    if (!canvasEditorDisplay || !canvasEditorTextarea) return
-    const lines = canvasEditorTextarea.value.split('\n')
-    canvasEditorDisplay.innerHTML = lines.map(line => 
-        `<span>${line.replace(/</g, '&lt;').replace(/>/g, '&gt;')}\n</span>`
-    ).join('')
-}
-
-function syncEditorScroll() {
-    if (!canvasEditorDisplay || !canvasEditorTextarea) return
-    const scrollTop = canvasEditorTextarea.scrollTop
-    canvasEditorDisplay.style.transform = `translateY(${-scrollTop}px)`
-}
+// Note: syncEditorDisplay and syncEditorScroll are now handled internally by the CodeEditor component
 
 function isEditableFile(filePath) {
     const editableExtensions = ['glsl', 'wgsl', 'json', 'js', 'md', 'txt']
@@ -532,26 +516,25 @@ function isEditableFile(filePath) {
 }
 
 function switchEditorFile(filePath) {
-    if (!canvasEditorTextarea) return
+    if (!canvasEditor) return
     
     saveCurrentEditorContent()
     canvasEditorCurrentFile = filePath
     
     if (filePath === 'dsl.txt') {
-        canvasEditorTextarea.value = dslEditor?.value || ''
+        canvasEditor.value = dslEditor?.value || ''
     } else {
         const content = workspaceStore.getFile(filePath)
-        canvasEditorTextarea.value = content || ''
+        canvasEditor.value = content || ''
     }
     
-    syncEditorDisplay()
-    canvasEditorTextarea.focus()
+    canvasEditor.focus()
 }
 
 function saveCurrentEditorContent() {
-    if (!canvasEditorTextarea) return
+    if (!canvasEditor) return
     
-    const content = canvasEditorTextarea.value
+    const content = canvasEditor.value
     
     if (canvasEditorCurrentFile === 'dsl.txt') {
         if (dslEditor) {
@@ -563,10 +546,10 @@ function saveCurrentEditorContent() {
 }
 
 async function recompileFromEditor() {
-    if (!renderer || !canvasEditorTextarea) return { success: false, error: 'Not initialized' }
+    if (!renderer || !canvasEditor) return { success: false, error: 'Not initialized' }
     
     const currentFile = canvasEditorCurrentFile
-    const content = canvasEditorTextarea.value
+    const content = canvasEditor.value
     
     if (currentFile === 'dsl.txt') {
         if (dslEditor) {
@@ -625,11 +608,10 @@ function toggleCanvasEditor() {
         hideCompilerError()
     }
     
-    if (isHidden && canvasEditorTextarea) {
+    if (isHidden && canvasEditor) {
         canvasEditorCurrentFile = 'dsl.txt'
-        canvasEditorTextarea.value = dslEditor?.value || ''
-        syncEditorDisplay()
-        canvasEditorTextarea.focus()
+        canvasEditor.value = dslEditor?.value || ''
+        canvasEditor.focus()
     }
     
     updateOverlayToggleStates()
@@ -648,15 +630,11 @@ function openCanvasEditorWithFile(filePath) {
 }
 
 function setupCanvasEditorHotReload() {
-    if (!canvasEditorTextarea) return
-    
-    canvasEditorTextarea.addEventListener('scroll', syncEditorScroll, { passive: true })
+    if (!canvasEditor) return
     
     // Hot reload: recompile 500ms after user stops typing
-    canvasEditorTextarea.addEventListener('input', () => {
-        syncEditorDisplay()
-        requestAnimationFrame(syncEditorScroll)
-        
+    // The CodeEditor component handles scroll sync internally
+    canvasEditor.addEventListener('input', () => {
         if (hotReloadTimeout) {
             clearTimeout(hotReloadTimeout)
         }
@@ -676,24 +654,21 @@ function setupCanvasEditorHotReload() {
         }, 500)
     })
     
-    // Keyboard shortcut: Ctrl/Cmd+Enter for immediate recompile
-    canvasEditorTextarea.addEventListener('keydown', async (e) => {
-        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-            e.preventDefault()
-            if (hotReloadTimeout) {
-                clearTimeout(hotReloadTimeout)
-                hotReloadTimeout = null
-            }
-            setAgentStatus('Compiling...')
-            const result = await recompileFromEditor()
-            if (!result.success) {
-                console.warn('Manual compile failed:', result.error)
-                showCompilerError(result.error)
-                setAgentStatus('Error')
-            } else {
-                hideCompilerError()
-                setAgentStatus('Ready')
-            }
+    // Listen for forcerecompile event from CodeEditor (Ctrl/Cmd+Enter)
+    canvasEditor.addEventListener('forcerecompile', async () => {
+        if (hotReloadTimeout) {
+            clearTimeout(hotReloadTimeout)
+            hotReloadTimeout = null
+        }
+        setAgentStatus('Compiling...')
+        const result = await recompileFromEditor()
+        if (!result.success) {
+            console.warn('Manual compile failed:', result.error)
+            showCompilerError(result.error)
+            setAgentStatus('Error')
+        } else {
+            hideCompilerError()
+            setAgentStatus('Ready')
         }
     })
 }
@@ -716,9 +691,8 @@ function initCanvasEditorControls() {
 
 function setOriginalDsl(dsl) {
     originalDsl = dsl
-    if (canvasEditorTextarea && canvasEditorCurrentFile === 'dsl.txt') {
-        canvasEditorTextarea.value = dsl
-        syncEditorDisplay()
+    if (canvasEditor && canvasEditorCurrentFile === 'dsl.txt') {
+        canvasEditor.value = dsl
     }
 }
 
@@ -835,10 +809,9 @@ async function init() {
             
             if (dsl) {
                 dslEditor.value = dsl
-                if (canvasEditorTextarea) {
-                    canvasEditorTextarea.value = dsl
+                if (canvasEditor) {
+                    canvasEditor.value = dsl
                     canvasEditorCurrentFile = 'dsl.txt'
-                    syncEditorDisplay()
                 }
                 await compileAndRun()
                 renderer.start()
@@ -867,9 +840,8 @@ async function init() {
         }
         
         // Sync to canvas editor
-        if (canvasEditorTextarea) {
-            canvasEditorTextarea.value = dslEditor.value
-            syncEditorDisplay()
+        if (canvasEditor) {
+            canvasEditor.value = dslEditor.value
         }
 
         updateLoadingStatus('Compiling shaders')
@@ -894,9 +866,8 @@ async function init() {
             saveTimeout = setTimeout(() => {
                 saveUIState({ dsl: dslEditor.value })
             }, 1000)
-            if (canvasEditorVisible && canvasEditorTextarea && canvasEditorCurrentFile === 'dsl.txt') {
-                canvasEditorTextarea.value = dslEditor.value
-                syncEditorDisplay()
+            if (canvasEditorVisible && canvasEditor && canvasEditorCurrentFile === 'dsl.txt') {
+                canvasEditor.value = dslEditor.value
             }
         })
 
@@ -1267,8 +1238,8 @@ workspaceStore.addEventListener('change', () => {
 
 init().then(() => {
     // Focus editor after load
-    if (canvasEditorTextarea) {
-        canvasEditorTextarea.focus()
+    if (canvasEditor) {
+        canvasEditor.focus()
     }
 })
 

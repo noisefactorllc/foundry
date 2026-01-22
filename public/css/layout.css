@@ -265,7 +265,7 @@ body {
     border-radius: 3px;
 }
 
-/* Canvas Code Editor */
+/* Canvas Code Editor - uses <code-editor> web component */
 #canvas-editor {
     position: absolute;
     top: 0.75rem;
@@ -277,96 +277,7 @@ body {
     font-family: ui-monospace, 'Cascadia Mono', 'Consolas', monospace;
     font-size: 0.875rem;
     line-height: 1.6;
-    pointer-events: none;
-}
-
-#canvas-editor-textarea {
-    pointer-events: auto;
-}
-
-@keyframes blink-caret {
-    0%, 49% { caret-color: #fff; }
-    50%, 100% { caret-color: transparent; }
-}
-
-/* The textarea is the editable layer */
-#canvas-editor-textarea {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    margin: 0;
-    padding: 0;
-    background: transparent;
-    border: none !important;
-    outline: none !important;
-    box-shadow: none !important;
-    resize: none;
-    font: inherit;
-    line-height: inherit;
-    letter-spacing: inherit;
-    word-spacing: inherit;
-    color: transparent;
-    caret-color: #fff;
-    animation: blink-caret 1s step-end infinite;
-    white-space: pre-wrap;
-    overflow-wrap: break-word;
-    word-break: break-word;
-    box-sizing: border-box;
-    -webkit-appearance: none;
-    appearance: none;
-    overflow-y: auto;
-    overflow-x: hidden;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-    z-index: 2;
-}
-
-#canvas-editor-textarea::-webkit-scrollbar {
-    width: 0;
-    height: 0;
-    display: none;
-}
-
-#canvas-editor-textarea::selection {
-    background: #667eea;
-    color: transparent;
-}
-
-#canvas-editor-textarea::-moz-selection {
-    background: #667eea;
-    color: transparent;
-}
-
-/* Display layer positioned behind textarea, tracks scroll via transform */
-#canvas-editor-display {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    pointer-events: none;
-    white-space: pre-wrap;
-    overflow-wrap: break-word;
-    word-break: break-word;
-    font: inherit;
-    line-height: inherit;
-    letter-spacing: inherit;
-    word-spacing: inherit;
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    will-change: transform;
-    z-index: 1;
-}
-
-#canvas-editor-display span {
-    display: inline;
-    background: rgba(0, 0, 0, 0.85);
-    color: #e3e3e3;
-    -webkit-box-decoration-break: clone;
-    box-decoration-break: clone;
-    padding: 0 0.15em;
+    /* The code-editor component handles pointer-events internally */
 }
 
 /* Compiler Error Display */

@@ -3,7 +3,7 @@
  *
  * A custom code editor component designed for DSL editing with:
  * - Line numbers
- * - Syntax highlighting for the Noisemaker DSL
+ * - Syntax highlighting for the Polymorphic DSL
  * - Improved cursor visibility
  * - Better text selection highlighting
  * - Configurable font, text size, background color and opacity
@@ -197,7 +197,6 @@ function tokenizeLine(line) {
 
     return tokens
 }
-
 
 /**
  * Convert tokens to highlighted HTML
