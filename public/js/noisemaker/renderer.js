@@ -67,6 +67,8 @@ export class ShadeRenderer {
         // State
         this._initialized = false
         this._currentDsl = '' // The ONE canonical DSL source
+        this._lastGoodDsl = '' // Last successfully compiled DSL (for recovery)
+        this._hasCorruptedState = false // Flag to force fresh pipeline on next compile
         this._textCanvases = new Map() // Track text canvases for text effects
         this._uniformValues = {} // Track uniform values for DSL generation
         
@@ -107,6 +109,16 @@ export class ShadeRenderer {
     /** @returns {string} Current DSL source - THE ONE SOURCE OF TRUTH */
     get currentDsl() {
         return this._currentDsl
+    }
+
+    /** @returns {string} Last successfully compiled DSL (for recovery after errors) */
+    get lastGoodDsl() {
+        return this._lastGoodDsl
+    }
+
+    /** @returns {boolean} Whether the pipeline state is corrupted from a failed compile */
+    get hasCorruptedState() {
+        return this._hasCorruptedState
     }
 
     /** @returns {object} Effect manifest */
@@ -229,6 +241,18 @@ export class ShadeRenderer {
         // Clear tracked uniform values when compiling new DSL
         this._uniformValues = {}
 
+        // If previous compile failed and corrupted state, force pipeline reset
+        if (this._hasCorruptedState) {
+            console.log('[ShadeRenderer] compile: Previous compile failed, forcing pipeline reset')
+            try {
+                // Dispose the corrupted pipeline to force fresh creation
+                await this._renderer.dispose({ loseContext: false, resetCanvas: false })
+            } catch (disposeErr) {
+                console.warn('[ShadeRenderer] compile: Failed to dispose corrupted pipeline:', disposeErr)
+            }
+            this._hasCorruptedState = false
+        }
+
         try {
             // Extract effect names and load them if needed
             console.log('[ShadeRenderer] compile: DSL:', dsl)
@@ -249,8 +273,10 @@ export class ShadeRenderer {
             // Compile the DSL with shader overrides
             await this._renderer.compile(dsl, { shaderOverrides })
             
-            // Set THE ONE canonical DSL source BEFORE syncing ProgramState
+            // SUCCESS: Update state
             this._currentDsl = dsl
+            this._lastGoodDsl = dsl // Track last known good DSL
+            this._hasCorruptedState = false
             console.log('[ShadeRenderer] compile: _renderer.compile succeeded, currentDsl set')
 
             // Sync our ProgramState from the compiled DSL
@@ -264,6 +290,11 @@ export class ShadeRenderer {
             return { success: true }
         } catch (err) {
             console.error('Compilation error:', err)
+            
+            // CRITICAL: Mark state as corrupted so next compile forces fresh pipeline
+            this._hasCorruptedState = true
+            console.log('[ShadeRenderer] compile: Marked state as corrupted for recovery')
+            
             // Aggressively extract error message
             let errorMessage = 'Unknown compilation error'
             let diagnostics = null
