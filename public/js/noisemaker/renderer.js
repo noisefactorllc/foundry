@@ -8,7 +8,7 @@
  * @module noisemaker/renderer
  */
 
-import { CanvasRenderer, ProgramState, extractEffectNamesFromDsl, extractEffectsFromDsl } from './bundle.js'
+import { CanvasRenderer, ProgramState, extractEffectNamesFromDsl, extractEffectsFromDsl, getEffect, getAllEffects } from './bundle.js'
 
 /**
  * ShadeRenderer - Main rendering class for Shade
@@ -254,14 +254,39 @@ export class ShadeRenderer {
         }
 
         try {
+            // Build augmented manifest that includes registered user effects
+            const baseManifest = this._renderer.manifest || {}
+            const registeredEffects = getAllEffects()
+            const augmentedManifest = { ...baseManifest }
+            
+            // Add registered effects to manifest for extractEffectNamesFromDsl
+            for (const [key, effectDef] of registeredEffects) {
+                // Support both "namespace/name" and "namespace.name" formats
+                const slashKey = key.includes('.') ? key.replace('.', '/') : key
+                if (!augmentedManifest[slashKey]) {
+                    augmentedManifest[slashKey] = {
+                        starter: effectDef.starter !== false, // default to starter
+                        hasTex: effectDef.hasTex === true
+                    }
+                }
+            }
+            
             // Extract effect names and load them if needed
             console.log('[ShadeRenderer] compile: DSL:', dsl)
-            const effectData = extractEffectNamesFromDsl(dsl, this._renderer.manifest || {})
+            const effectData = extractEffectNamesFromDsl(dsl, augmentedManifest)
             console.log('[ShadeRenderer] compile: extractEffectNamesFromDsl returned:', effectData)
             const effectIds = effectData.map(e => e.effectId)
             console.log('[ShadeRenderer] compile: effectIds to load:', effectIds)
-            if (effectIds.length > 0) {
-                await this._renderer.loadEffects(effectIds)
+            
+            // Filter out registered effects - they don't need to be loaded from bundles
+            const effectIdsToLoad = effectIds.filter(id => {
+                const dotKey = id.replace('/', '.')
+                return !registeredEffects.has(id) && !registeredEffects.has(dotKey)
+            })
+            console.log('[ShadeRenderer] compile: effectIds to load (filtered):', effectIdsToLoad)
+            
+            if (effectIdsToLoad.length > 0) {
+                await this._renderer.loadEffects(effectIdsToLoad)
             }
             console.log('[ShadeRenderer] compile: loadedEffects after load:', 
                         Array.from(this._renderer._loadedEffects?.keys() || []))
@@ -290,6 +315,9 @@ export class ShadeRenderer {
             return { success: true }
         } catch (err) {
             console.error('Compilation error:', err)
+            if (err.diagnostics) {
+                console.error('Compilation diagnostics:', JSON.stringify(err.diagnostics, null, 2))
+            }
             
             // CRITICAL: Mark state as corrupted so next compile forces fresh pipeline
             this._hasCorruptedState = true
@@ -834,24 +862,35 @@ export class ShadeRenderer {
 
     /**
      * Build DSL source from an effect and its namespace
-     * Generates the correct DSL syntax for specialized namespaces (points, synth3d, etc.)
+     * Delegates to the internal renderer's buildDslSource which has the proper logic
+     * for all effect types, search directives, starter/hasTex handling, etc.
      * @param {object} effect - Effect object with namespace and instance
      * @returns {string} Generated DSL program
      */
     buildDslSource(effect) {
-        // Use the internal renderer's buildDslSource if available
+        // Use the internal renderer's buildDslSource
         if (this._renderer.buildDslSource) {
             return this._renderer.buildDslSource(effect)
         }
         
-        // Fallback implementation for specialized namespaces
+        // Fallback if internal buildDslSource not available
         if (!effect || !effect.instance) {
             return ''
         }
-        
+
         const namespace = effect.namespace
         const funcName = effect.instance.func || effect.name
+        const effectId = `${namespace}/${effect.name}`
         
+        // Get manifest info for this effect, or use values from instance (for workspace effects)
+        const manifestEntry = this._renderer.manifest?.[effectId] || {}
+        const isStarter = effect.instance.starter !== undefined 
+            ? effect.instance.starter === true 
+            : manifestEntry.starter === true
+        const hasTex = effect.instance.hasTex !== undefined 
+            ? effect.instance.hasTex === true 
+            : manifestEntry.hasTex === true
+
         // Points namespace: needs pointsEmit/pointsRender wrapper
         if (namespace === 'points') {
             return `search points, synth, render
@@ -875,25 +914,64 @@ ${funcName}()
 
 render(o0)`
         }
-        
-        // Filter/mixer namespaces need an input
-        if (namespace === 'filter' || namespace === 'mixer') {
-            return `search ${namespace}, synth
+
+        // Determine search directive based on namespace
+        let searchNs = namespace
+        if (namespace === 'classicNoisemaker') {
+            searchNs = 'classicNoisemaker, synth'
+        } else if (namespace === 'classicNoisedeck') {
+            searchNs = 'classicNoisedeck, synth'
+        } else if (namespace === 'render') {
+            searchNs = 'synth, filter, render'
+        } else if (namespace === 'filter' || namespace === 'mixer') {
+            searchNs = `${namespace}, synth`
+        }
+
+        // Generate DSL based on starter/hasTex from manifest
+        if (isStarter) {
+            if (hasTex) {
+                // Starter with tex: generate source, then apply effect with tex
+                return `search ${searchNs}
+
+noise()
+  .write(o0)
+
+${funcName}(tex: read(o0))
+  .write(o1)
+
+render(o1)`
+            } else {
+                // Pure starter: just run the effect
+                return `search ${searchNs}
+
+${funcName}()
+  .write(o0)
+
+render(o0)`
+            }
+        } else {
+            if (hasTex) {
+                // Non-starter with tex: needs two inputs
+                return `search ${searchNs}
+
+noise()
+  .write(o0)
+
+noise(seed: 2)
+  .${funcName}(tex: read(o0))
+  .write(o1)
+
+render(o1)`
+            } else {
+                // Non-starter without tex: chain after noise
+                return `search ${searchNs}
 
 noise()
   .${funcName}()
   .write(o0)
 
 render(o0)`
+            }
         }
-        
-        // Default: synth starter pattern
-        const searchNs = namespace === 'classicNoisemaker' ? 'classicNoisemaker, synth' : (namespace || 'synth')
-        return `search ${searchNs}, filter
-
-${funcName}()
-  .write(o0)
-
-render(o0)`
     }
 }

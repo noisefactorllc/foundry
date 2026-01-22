@@ -11,6 +11,7 @@
     <link rel="preload" href="/fonts/Nunito.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="css/fonts.css">
     <link rel="stylesheet" href="css/colors.css">
+    <link rel="stylesheet" href="css/menu.css">
     <link rel="stylesheet" href="css/layout.css">
     <link rel="stylesheet" href="css/editor.css">
     <link rel="stylesheet" href="css/controls.css">
@@ -36,6 +37,81 @@
     </div>
 
     <div id="app">
+        <!-- Menu Bar (at app level, like noisedeck) -->
+        <div id="menu">
+            <div id="menuBackdrop"></div>
+            <div id="menuLeft">
+                <div class="menu">
+                    <div class="menu-title">
+                        <svg width="1.75em" height="1.75em" viewBox="0 0 1024 1024" version="1.1" id="logo"
+                            xmlns="http://www.w3.org/2000/svg" xmlns:svg="http://www.w3.org/2000/svg">
+                            <defs id="defs1" />
+                            <path id="logoPath" fill="#e3e3e3" stroke="none" stroke-width="1"
+                                d="M 756.00,104.21 C 756.00,104.21 776.00,104.21 776.00,104.21
+                                801.34,104.04 827.43,118.01 843.70,137.00 856.73,152.21 865.97,173.81 866.00,194.00
+                                866.00,194.00 866.00,208.00 866.00,208.00 865.64,238.83 843.52,270.32 817.00,284.69
+                                797.06,295.50 783.92,296.25 762.00,296.00 756.25,295.93 750.56,294.79 745.00,293.37
+                                713.51,285.31 688.61,261.80 678.35,231.00 673.48,216.36 673.98,208.87 674.00,194.00
+                                674.02,183.36 676.62,172.83 680.60,163.00 693.89,130.21 721.60,110.06 756.00,104.21 Z
+                                M 351.00,455.00 C 351.00,455.00 351.00,612.00 351.00,612.00 350.97,633.01 345.15,659.43 331.69,676.00
+                                309.55,703.24 278.61,706.38 246.00,706.00 223.30,705.73 198.62,697.69 182.17,681.71
+                                166.73,666.72 158.03,640.27 158.00,619.00 158.00,619.00 158.00,196.00 158.00,196.00
+                                158.05,163.07 174.30,129.94 204.00,114.32 226.05,102.72 263.55,102.22 287.00,109.75
+                                306.56,116.02 316.95,126.88 331.00,141.00 343.17,153.23 375.56,194.95 388.40,211.00
+                                388.40,211.00 506.00,358.00 506.00,358.00 506.00,358.00 618.20,498.00 618.20,498.00
+                                618.20,498.00 653.40,542.00 653.40,542.00 653.40,542.00 674.00,568.00 674.00,568.00
+                                674.00,568.00 674.00,434.00 674.00,434.00 674.00,401.91 672.64,372.58 694.46,346.00
+                                709.94,327.15 738.18,318.04 762.00,318.00 762.00,318.00 780.00,318.00 780.00,318.00
+                                788.95,318.11 803.54,320.87 812.00,323.86 823.24,327.84 832.28,332.78 840.99,341.09
+                                857.95,357.27 865.96,385.02 866.00,408.00 866.00,408.00 866.00,831.00 866.00,831.00
+                                865.98,841.94 863.51,855.63 860.00,866.00 852.05,889.46 833.98,908.46 810.00,915.56
+                                797.75,919.19 787.49,919.02 775.00,919.00 762.96,918.98 745.16,916.07 734.00,911.55
+                                717.26,904.77 706.51,894.51 694.00,882.00 675.10,863.10 653.81,834.51 636.60,813.00
+                                636.60,813.00 518.40,665.00 518.40,665.00 518.40,665.00 410.60,530.00 410.60,530.00
+                                410.60,530.00 351.00,455.00 351.00,455.00 Z M 240.00,727.21 C 240.00,727.21 260.00,727.21 260.00,727.21
+                                285.34,727.04 311.43,741.01 327.70,760.00 340.73,775.21 349.97,796.81 350.00,817.00
+                                350.00,817.00 350.00,831.00 350.00,831.00 349.64,861.83 327.52,893.32 301.00,907.69
+                                281.06,918.50 267.92,919.25 246.00,919.00 240.25,918.93 234.56,917.79 229.00,916.37
+                                197.51,908.31 172.61,884.80 162.35,854.00 157.48,839.36 157.98,831.87 158.00,817.00
+                                158.02,806.36 160.62,795.83 164.60,786.00 177.89,753.21 205.60,733.06 240.00,727.21 Z" />
+                        </svg>
+                    </div>
+                    <div class="menu-items hide">
+                        <div id="aboutMenuItem">about HADES</div>
+                    </div>
+                </div>
+                <div class="menu">
+                    <div class="menu-title">file</div>
+                    <div class="menu-items hide">
+                        <div id="workspaceFilesMenuItem">workspace files</div>
+                        <div id="saveEffectMenuItem">save effect workspace</div>
+                        <div id="downloadWorkspaceMenuItem">download workspace files</div>
+                        <hr class="menu-seperator">
+                        <div id="importFromLibraryMenuItem">import effect from library...</div>
+                    </div>
+                </div>
+                <div class="menu">
+                    <div class="menu-title">edit</div>
+                    <div class="menu-items hide">
+                    </div>
+                </div>
+                <div class="menu">
+                    <div class="menu-title">effect</div>
+                    <div class="menu-items hide">
+                        <div id="showParametersMenuItem">show parameters</div>
+                        <hr class="menu-seperator">
+                        <div id="editInNoisedeckMenuItem">edit in Noisedeck...</div>
+                        <div id="sharePubliclyMenuItem">share publicly...</div>
+                    </div>
+                </div>
+            </div>
+            <div id="menuRight">
+                <button id="toggle-dsl-overlay" class="menu-icon-btn icon-material active" title="Show DSL" aria-label="Toggle DSL code">code</button>
+                <div class="menu-separator"></div>
+                <button id="play-pause-btn" class="menu-icon-btn icon-material" title="Play/Pause (Space)" aria-label="Play/Pause">pause</button>
+            </div>
+        </div>
+
         <!-- Hidden elements for legacy compatibility -->
         <textarea id="dsl-editor" style="display:none" spellcheck="false"></textarea>
         <div id="compile-status" class="compile-status" style="display:none"></div>
@@ -46,20 +122,8 @@
             <div class="canvas-container">
                 <canvas id="canvas" width="1024" height="1024" aria-label="Shader preview"></canvas>
                 
-                <!-- Canvas Overlay Toggle Buttons (bottom right) -->
-                <div class="canvas-overlay-toggles" role="toolbar" aria-label="Canvas overlay controls">
-                    <button id="toggle-params-overlay" class="overlay-toggle-btn" title="Parameters" aria-label="Toggle parameters">
-                        <span class="icon-material">tune</span>
-                    </button>
-                    <button id="toggle-saved-overlay" class="overlay-toggle-btn" title="Saved Effects" aria-label="Toggle saved effects">
-                        <span class="icon-material">save</span>
-                    </button>
-                    <button id="toggle-workspace-overlay" class="overlay-toggle-btn" title="Workspace Files" aria-label="Toggle workspace files">
-                        <span class="icon-material">folder_open</span>
-                    </button>
-                    <button id="toggle-dsl-overlay" class="overlay-toggle-btn active" title="Show DSL" aria-label="Toggle DSL code">
-                        <span class="icon-material">code</span>
-                    </button>
+                <!-- Control Buttons (top right) -->
+                <div class="control-buttons" role="toolbar" aria-label="Controls">
                 </div>
                 
                 <!-- Params Overlay (bottom left) -->
@@ -91,94 +155,11 @@
                     </div>
                 </div>
                 
-                <!-- Workspace Files Overlay (bottom left) -->
-                <div id="workspace-overlay" class="canvas-overlay bottom-left" hidden>
-                    <div class="overlay-header">
-                        <span class="overlay-title">Workspace Files</span>
-                        <button class="overlay-close-btn" aria-label="Close">
-                            <span class="icon-material">close</span>
-                        </button>
-                    </div>
-                    <div id="workspace-overlay-content" class="overlay-content" role="tree" aria-label="Workspace files">
-                        <div class="empty-state">No effect loaded</div>
-                    </div>
-                </div>
-                
                 <!-- Canvas Code Editor (visible by default for HADES) -->
                 <code-editor id="canvas-editor" line-numbers="true" placeholder="Enter DSL code here..."></code-editor>
                 
                 <!-- Compiler Error Display -->
                 <div id="compiler-error"></div>
-            </div>
-            <div class="playback-controls" role="toolbar" aria-label="Playback controls">
-                <button id="play-pause-btn" class="control-btn" title="Play/Pause (Space)" aria-label="Play/Pause">
-                    <span class="icon icon-material" aria-hidden="true">pause</span>
-                </button>
-                <div class="duration-control">
-                    <label for="duration-input">Duration:</label>
-                    <input type="number" id="duration-input" value="10" min="1" max="60" step="1" aria-label="Loop duration in seconds">
-                    <span aria-hidden="true">sec</span>
-                </div>
-                <div class="fps-display" aria-live="polite">
-                    <span id="fps-counter">-- fps</span>
-                </div>
-                <div id="backend-switch" class="backend-switch hidden" role="group" aria-label="Rendering backend">
-                    <button id="backend-webgl2" class="backend-btn active" title="Use WebGL2 (GLSL)" aria-pressed="true">
-                        <span class="backend-label">WebGL2</span>
-                    </button>
-                    <button id="backend-webgpu" class="backend-btn" title="Use WebGPU (WGSL)" aria-pressed="false">
-                        <span class="backend-label">WebGPU</span>
-                    </button>
-                </div>
-                <button id="export-btn" class="action-btn" title="Download workspace files" aria-label="Export Bundle">Export</button>
-                <button id="noisedeck-btn" class="action-btn noisedeck-btn" title="Open in Noisedeck" aria-label="Edit in Noisedeck">
-                    <svg class="noisedeck-logo" viewBox="0 0 1024 1024" width="16" height="16" aria-hidden="true">
-                        <path fill="currentColor" d="M 756.00,104.21 C 756.00,104.21 776.00,104.21 776.00,104.21 801.34,104.04 827.43,118.01 843.70,137.00 856.73,152.21 865.97,173.81 866.00,194.00 866.00,194.00 866.00,208.00 866.00,208.00 865.64,238.83 843.52,270.32 817.00,284.69 797.06,295.50 783.92,296.25 762.00,296.00 756.25,295.93 750.56,294.79 745.00,293.37 713.51,285.31 688.61,261.80 678.35,231.00 673.48,216.36 673.98,208.87 674.00,194.00 674.02,183.36 676.62,172.83 680.60,163.00 693.89,130.21 721.60,110.06 756.00,104.21 Z M 351.00,455.00 C 351.00,455.00 351.00,612.00 351.00,612.00 350.97,633.01 345.15,659.43 331.69,676.00 309.55,703.24 278.61,706.38 246.00,706.00 223.30,705.73 198.62,697.69 182.17,681.71 166.73,666.72 158.03,640.27 158.00,619.00 158.00,619.00 158.00,196.00 158.00,196.00 158.05,163.07 174.30,129.94 204.00,114.32 226.05,102.72 263.55,102.22 287.00,109.75 306.56,116.02 316.95,126.88 331.00,141.00 343.17,153.23 375.56,194.95 388.40,211.00 388.40,211.00 506.00,358.00 506.00,358.00 506.00,358.00 618.20,498.00 618.20,498.00 618.20,498.00 653.40,542.00 653.40,542.00 653.40,542.00 674.00,568.00 674.00,568.00 674.00,568.00 674.00,434.00 674.00,434.00 674.00,401.91 672.64,372.58 694.46,346.00 709.94,327.15 738.18,318.04 762.00,318.00 762.00,318.00 780.00,318.00 780.00,318.00 788.95,318.11 803.54,320.87 812.00,323.86 823.24,327.84 832.28,332.78 840.99,341.09 857.95,357.27 865.96,385.02 866.00,408.00 866.00,408.00 866.00,831.00 866.00,831.00 865.98,841.94 863.51,855.63 860.00,866.00 852.05,889.46 833.98,908.46 810.00,915.56 797.75,919.19 787.49,919.02 775.00,919.00 762.96,918.98 745.16,916.07 734.00,911.55 717.26,904.77 706.51,894.51 694.00,882.00 675.10,863.10 653.81,834.51 636.60,813.00 636.60,813.00 518.40,665.00 518.40,665.00 518.40,665.00 410.60,530.00 410.60,530.00 410.60,530.00 351.00,455.00 351.00,455.00 Z M 240.00,727.21 C 240.00,727.21 260.00,727.21 260.00,727.21 285.34,727.04 311.43,741.01 327.70,760.00 340.73,775.21 349.97,796.81 350.00,817.00 350.00,817.00 350.00,831.00 350.00,831.00 349.64,861.83 327.52,893.32 301.00,907.69 281.06,918.50 267.92,919.25 246.00,919.00 240.25,918.93 234.56,917.79 229.00,916.37 197.51,908.31 172.61,884.80 162.35,854.00 157.48,839.36 157.98,831.87 158.00,817.00 158.02,806.36 160.62,795.83 164.60,786.00 177.89,753.21 205.60,733.06 240.00,727.21 Z"/>
-                    </svg>
-                    <span>Noisedeck</span>
-                </button>
-            </div>
-        </div>
-
-        <!-- Right Panel: Info & Controls (simplified from chat) -->
-        <div id="right-panel" class="panel" role="complementary" aria-label="Info Panel">
-            <div class="panel-header">
-                <h2 id="app-title" class="clickable-title" role="button" tabindex="0" aria-label="About HADES">HADES</h2>
-                <div class="header-right">
-                    <div class="agent-status" id="agent-status" role="status" aria-live="polite">
-                        <span class="status-dot"></span>
-                        <span class="status-text">Ready</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Info Area -->
-            <div id="info-area" class="info-area">
-                <div class="info-section">
-                    <h3>Quick Start</h3>
-                    <p>Edit DSL code in the editor overlay. Changes compile automatically after 500ms.</p>
-                    <p><kbd>Ctrl/Cmd + Enter</kbd> to force recompile.</p>
-                </div>
-                
-                <div class="info-section">
-                    <h3>Keyboard Shortcuts</h3>
-                    <ul class="shortcuts-list">
-                        <li><kbd>Space</kbd> Play/Pause</li>
-                        <li><kbd>Ctrl/Cmd + E</kbd> Export</li>
-                        <li><kbd>F1</kbd> Help</li>
-                        <li><kbd>Escape</kbd> Close overlays</li>
-                    </ul>
-                </div>
-
-                <div class="info-section">
-                    <h3>Effect Library</h3>
-                    <div id="effect-search-container">
-                        <input type="text" id="effect-search" placeholder="Search effects..." aria-label="Search effects">
-                    </div>
-                    <div id="effect-list" class="effect-list" role="listbox" aria-label="Available effects">
-                        <!-- Populated by JS -->
-                    </div>
-                </div>
             </div>
         </div>
     </div>

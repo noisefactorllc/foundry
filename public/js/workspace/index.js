@@ -42,6 +42,26 @@ export function registerEffectFromWorkspace(renderer = null) {
         
         const globals = def.globals || {}
 
+        // Migrate old workspaces: update dsl.txt to use 'user' namespace
+        const originalNamespace = def.originalNamespace || def.namespace
+        if (originalNamespace && originalNamespace !== 'user') {
+            let dsl = workspaceStore.getFile('dsl.txt')
+            if (dsl && dsl.includes(`search ${originalNamespace}`)) {
+                dsl = dsl.replace(
+                    new RegExp(`(search\\s+)${originalNamespace}(\\s*,|\\s*\\n)`, 'g'),
+                    `$1user$2`
+                )
+                workspaceStore.setFile('dsl.txt', dsl)
+                console.log('[Workspace] Migrated dsl.txt to use user namespace')
+            }
+            // Also update definition.json namespace
+            if (def.namespace !== 'user') {
+                def.namespace = 'user'
+                workspaceStore.setFile('definition.json', JSON.stringify(def, null, 2))
+                console.log('[Workspace] Migrated definition.json to use user namespace')
+            }
+        }
+
         // Find all shader files keyed by their program names
         const shaders = {}
         for (const [path, content] of workspaceStore.files) {
@@ -71,10 +91,10 @@ export function registerEffectFromWorkspace(renderer = null) {
             uniform: udef.uniform || uname
         }))
 
-        // Use original namespace from definition, fallback to synth
-        const namespace = def.namespace || 'synth'
+        // Use 'user' namespace for workspace effects
+        const namespace = 'user'
 
-        // Register as an op in the original namespace
+        // Register as an op in the user namespace
         const opName = `${namespace}.${name}`
         const opSpec = {
             name: name,
@@ -82,35 +102,56 @@ export function registerEffectFromWorkspace(renderer = null) {
         }
         console.log('[Workspace] Registering op:', opName, 'with args:', args.map(a => a.name))
         registerOp(opName, opSpec)
-        registerStarterOps([opName])
-        console.log('[Workspace] Op registration complete')
+        
+        // Only register as starter if it IS a starter effect
+        const isStarter = def.starter === true
+        if (isStarter) {
+            registerStarterOps([opName])
+        }
+        console.log('[Workspace] Op registration complete, starter:', isStarter)
 
         // Determine passes - use stored passes from definition if available,
-        // otherwise create a default single-pass structure
+        // otherwise create correct pass structure based on effect type
         let passes
         if (def.passes && Array.isArray(def.passes) && def.passes.length > 0) {
-            // Use the original passes structure (preserves program names, inputs, outputs)
+            // Use the stored passes structure
             passes = def.passes
             console.log('[Workspace] Using stored passes:', passes.map(p => p.program).join(', '))
         } else {
-            // Fallback for simple effects: create default pass using first shader
+            // Create correct pass structure based on starter flag
             const firstProgram = Object.keys(shaders)[0]
-            passes = [
-                {
-                    name: 'render',
-                    program: firstProgram,
-                    inputs: {},
-                    outputs: { fragColor: 'outputTex' }
-                }
-            ]
-            console.log('[Workspace] Created default pass for program:', firstProgram)
+            const isStarter = def.starter === true
+            
+            if (isStarter) {
+                // Starter effect: no input, just output
+                passes = [
+                    {
+                        name: 'render',
+                        program: firstProgram,
+                        inputs: {},
+                        outputs: { fragColor: 'outputTex' }
+                    }
+                ]
+            } else {
+                // Filter effect: takes input, produces output
+                passes = [
+                    {
+                        name: 'render',
+                        program: firstProgram,
+                        inputs: { inputTex: 'source' },
+                        outputs: { fragColor: 'outputTex' }
+                    }
+                ]
+            }
+            console.log('[Workspace] Created', isStarter ? 'starter' : 'filter', 'pass for program:', firstProgram)
         }
 
-        // Create effect definition using original namespace
+        // Create effect definition using 'user' namespace
         const effectDef = {
             name: name,
             namespace: namespace,
             func: name,
+            starter: def.starter === true,  // Preserve starter flag
             description: def.description || `Custom effect: ${name}`,
             tags: def.tags || ['custom'],
             globals,
