@@ -1,0 +1,586 @@
+/**
+ * HADES Layout
+ * Two-column layout (canvas + info panel)
+ */
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html, body {
+    height: 100%;
+    overflow: hidden;
+}
+
+body {
+    font-family: var(--font-body);
+    font-size: 14px;
+    line-height: 1.5;
+    background-color: var(--color-bg);
+    color: var(--color-text-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Main app container - two column grid (canvas + info) */
+#app {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    height: 100vh;
+    gap: 1px;
+    background-color: var(--color-border);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity var(--transition-normal);
+}
+
+#app.loaded {
+    opacity: 1;
+    visibility: visible;
+}
+
+.panel {
+    background-color: var(--color-bg);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background-color: var(--color-bg-elevated);
+    flex-shrink: 0;
+}
+
+.panel-header h2 {
+    font-family: var(--font-display);
+    font-size: 12px;
+    font-weight: 400;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+    margin: 0;
+}
+
+.panel-header h2.clickable-title {
+    cursor: pointer;
+    transition: color var(--transition-fast), text-shadow var(--transition-fast);
+}
+
+.panel-header h2.clickable-title:hover,
+.panel-header h2.clickable-title:focus {
+    color: var(--color-accent);
+    text-shadow: 0 0 12px var(--color-accent);
+    outline: none;
+}
+
+/* Header right-side content container */
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Center Panel - Canvas */
+#center-panel {
+    display: flex;
+    flex-direction: column;
+    background-color: #000;
+}
+
+.canvas-container {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+}
+
+#canvas {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* =========================================================================
+   Canvas Overlay System
+   ========================================================================= */
+
+/* Toggle buttons - bottom right of canvas */
+.canvas-overlay-toggles {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 200;
+    pointer-events: auto;
+}
+
+.overlay-toggle-btn {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(8, 9, 12, 0.75);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: none;
+    pointer-events: auto;
+    border-radius: var(--radius-md);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.overlay-toggle-btn:hover {
+    background-color: rgba(15, 17, 20, 0.9);
+    color: var(--color-text-primary);
+}
+
+.overlay-toggle-btn.active {
+    background-color: rgba(0, 212, 255, 0.15);
+    color: var(--color-accent);
+    box-shadow: 0 0 12px var(--color-accent-muted);
+}
+
+.overlay-toggle-btn .icon-material {
+    font-size: 20px;
+}
+
+/* Canvas overlays - shared styles */
+.canvas-overlay {
+    position: absolute;
+    z-index: 40;
+    background-color: rgba(8, 9, 12, 0.88);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: none;
+    border-radius: var(--radius-md);
+    max-width: 320px;
+    max-height: 50%;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    animation: overlay-fade-in 0.15s ease-out;
+}
+
+@keyframes overlay-fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.canvas-overlay[hidden] {
+    display: none;
+}
+
+/* Bottom-left positioning */
+.canvas-overlay.bottom-left {
+    bottom: 16px;
+    left: 16px;
+}
+
+/* Overlay header */
+.overlay-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background-color: rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    flex-shrink: 0;
+}
+
+.overlay-title {
+    flex: 1;
+    font-family: var(--font-display);
+    font-size: 10px;
+    font-weight: 400;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+}
+
+.overlay-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.overlay-close-btn {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.overlay-close-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: var(--color-text-primary);
+}
+
+.overlay-close-btn .icon-material {
+    font-size: 16px;
+}
+
+/* Overlay content area */
+.overlay-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+}
+
+.overlay-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.overlay-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.overlay-content::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 3px;
+}
+
+/* Canvas Code Editor */
+#canvas-editor {
+    position: absolute;
+    top: 0.75rem;
+    bottom: 0.75rem;
+    left: 0.75rem;
+    right: 0.75rem;
+    overflow: hidden;
+    z-index: 30;
+    font-family: ui-monospace, 'Cascadia Mono', 'Consolas', monospace;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    pointer-events: none;
+}
+
+#canvas-editor-textarea {
+    pointer-events: auto;
+}
+
+@keyframes blink-caret {
+    0%, 49% { caret-color: #fff; }
+    50%, 100% { caret-color: transparent; }
+}
+
+/* The textarea is the editable layer */
+#canvas-editor-textarea {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    resize: none;
+    font: inherit;
+    line-height: inherit;
+    letter-spacing: inherit;
+    word-spacing: inherit;
+    color: transparent;
+    caret-color: #fff;
+    animation: blink-caret 1s step-end infinite;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    box-sizing: border-box;
+    -webkit-appearance: none;
+    appearance: none;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    z-index: 2;
+}
+
+#canvas-editor-textarea::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+}
+
+#canvas-editor-textarea::selection {
+    background: #667eea;
+    color: transparent;
+}
+
+#canvas-editor-textarea::-moz-selection {
+    background: #667eea;
+    color: transparent;
+}
+
+/* Display layer positioned behind textarea, tracks scroll via transform */
+#canvas-editor-display {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    pointer-events: none;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    font: inherit;
+    line-height: inherit;
+    letter-spacing: inherit;
+    word-spacing: inherit;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    will-change: transform;
+    z-index: 1;
+}
+
+#canvas-editor-display span {
+    display: inline;
+    background: rgba(0, 0, 0, 0.85);
+    color: #e3e3e3;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+    padding: 0 0.15em;
+}
+
+/* Compiler Error Display */
+#compiler-error {
+    position: absolute;
+    bottom: calc(0.75rem + 32px + 0.75rem);
+    left: 0.75rem;
+    right: 0.75rem;
+    padding: 0;
+    background: transparent;
+    color: #ff6b6b;
+    font-family: ui-monospace, 'Cascadia Mono', 'Consolas', monospace;
+    font-size: 11px;
+    line-height: 1.4;
+    z-index: 250;
+    display: none;
+    cursor: pointer;
+    user-select: text;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    pointer-events: auto;
+}
+
+#compiler-error.visible {
+    display: block;
+}
+
+#compiler-error span {
+    display: inline;
+    background: rgba(0, 0, 0, 0.85);
+    color: #ff6b6b;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+    padding: 0 0.15em;
+}
+
+#compiler-error span:hover {
+    background: rgba(0, 0, 0, 0.95);
+}
+
+.playback-controls {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 16px;
+    background-color: var(--color-bg-elevated);
+    flex-shrink: 0;
+}
+
+/* Right Panel - Info */
+#right-panel {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Info Area */
+.info-area {
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
+}
+
+.info-section {
+    margin-bottom: 24px;
+}
+
+.info-section h3 {
+    font-family: var(--font-display);
+    font-size: 10px;
+    font-weight: 400;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 12px;
+}
+
+.info-section p {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    margin-bottom: 8px;
+    line-height: 1.5;
+}
+
+.shortcuts-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.shortcuts-list li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    font-size: 12px;
+    color: var(--color-text-secondary);
+}
+
+.shortcuts-list kbd {
+    display: inline-block;
+    padding: 3px 8px;
+    background: linear-gradient(180deg, var(--color-bg-hover) 0%, var(--color-bg-elevated) 100%);
+    border: none;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--color-text-primary);
+    box-shadow: 0 2px 0 var(--color-border);
+}
+
+/* Effect Search */
+#effect-search-container {
+    margin-bottom: 12px;
+}
+
+#effect-search {
+    width: 100%;
+    padding: 10px 12px;
+    font-family: var(--font-body);
+    font-size: 13px;
+    background-color: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-primary);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+#effect-search:focus {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.1);
+}
+
+#effect-search::placeholder {
+    color: var(--color-text-placeholder);
+}
+
+/* Effect List */
+.effect-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.effect-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background-color var(--transition-fast);
+}
+
+.effect-item:hover {
+    background-color: var(--color-bg-hover);
+}
+
+.effect-item .effect-name {
+    flex: 1;
+    font-size: 13px;
+    color: var(--color-text-primary);
+}
+
+.effect-item .effect-namespace {
+    font-size: 10px;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+}
+
+/* Agent Status */
+.agent-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background-color: rgba(0, 0, 0, 0.3);
+    border-radius: var(--radius-md);
+    font-size: 11px;
+    color: var(--color-text-secondary);
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    background-color: var(--color-success);
+    border-radius: 50%;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+    #app {
+        grid-template-columns: 1fr 280px;
+    }
+}
+
+@media (max-width: 900px) {
+    #app {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr auto;
+    }
+    
+    #center-panel {
+        order: 1;
+    }
+    
+    #right-panel {
+        order: 2;
+        max-height: 35vh;
+    }
+}

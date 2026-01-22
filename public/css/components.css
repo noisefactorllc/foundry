@@ -1,0 +1,477 @@
+/**
+ * HADES Components
+ * Toast, Modal, and other UI components
+ */
+
+/* Toast Notifications */
+#toast-container {
+    position: fixed;
+    top: 24px;
+    left: 24px;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+}
+
+.toast {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    background-color: var(--color-glass);
+    backdrop-filter: blur(8px);
+    border: none;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    color: var(--color-text-primary);
+    font-family: var(--font-body);
+    font-size: 13px;
+    pointer-events: auto;
+    opacity: 0;
+    transform: translateX(20px);
+    transition: all var(--transition-normal);
+    max-width: 400px;
+}
+
+.toast-visible {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.toast-hiding {
+    opacity: 0;
+    transform: translateX(20px);
+}
+
+.toast-icon {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+}
+
+.toast-icon .icon-material {
+    font-size: 20px;
+}
+
+.toast-message {
+    flex: 1;
+    line-height: 1.4;
+}
+
+.toast-close {
+    background: none;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    padding: 4px;
+    line-height: 1;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.toast-close .icon-material {
+    font-size: 18px;
+}
+
+.toast-close:hover {
+    color: var(--color-text-primary);
+    background-color: var(--color-bg-hover);
+}
+
+/* Toast types */
+.toast-success {
+    border-left: 3px solid var(--color-success);
+    box-shadow: var(--shadow-lg), 0 0 20px rgba(34, 197, 94, 0.1);
+}
+
+.toast-success .toast-icon {
+    color: var(--color-success);
+}
+
+.toast-error {
+    border-left: 3px solid var(--color-error);
+    box-shadow: var(--shadow-lg), 0 0 20px rgba(239, 68, 68, 0.1);
+}
+
+.toast-error .toast-icon {
+    color: var(--color-error);
+}
+
+.toast-warning {
+    border-left: 3px solid var(--color-warning);
+    box-shadow: var(--shadow-lg), 0 0 20px rgba(245, 158, 11, 0.1);
+}
+
+.toast-warning .toast-icon {
+    color: var(--color-warning);
+}
+
+.toast-info {
+    border-left: 3px solid var(--color-accent);
+}
+
+.toast-info .toast-icon {
+    color: var(--color-accent);
+}
+
+/* Modal Styles */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: var(--color-bg-overlay);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    opacity: 0;
+    transition: opacity var(--transition-normal);
+}
+
+.modal-overlay.modal-visible {
+    opacity: 1;
+}
+
+.modal-content {
+    background-color: rgba(15, 17, 20, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-xl);
+    max-width: 520px;
+    width: 90%;
+    max-height: 80vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transform: scale(0.96) translateY(10px);
+    transition: transform var(--transition-normal);
+}
+
+.modal-visible .modal-content {
+    transform: scale(1) translateY(0);
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.02) 0%, transparent 100%);
+}
+
+.modal-header h2 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin: 0;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    color: var(--color-text-muted);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-fast);
+}
+
+.modal-close:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: var(--color-text-primary);
+}
+
+.modal-body {
+    padding: 24px;
+    overflow-y: auto;
+}
+
+/* Name Dialog */
+.name-dialog {
+    max-width: 400px;
+}
+
+.name-dialog-body {
+    padding: 20px 24px 24px;
+}
+
+.name-dialog-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    margin-bottom: 8px;
+    letter-spacing: 0.02em;
+}
+
+.name-dialog-input {
+    width: 100%;
+    padding: 12px 14px;
+    font-family: var(--font-body);
+    font-size: 14px;
+    background-color: rgba(0, 0, 0, 0.4);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-primary);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.name-dialog-input::placeholder {
+    color: var(--color-text-placeholder);
+}
+
+.name-dialog-input:focus {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.1);
+}
+
+.name-dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 24px;
+    background: linear-gradient(0deg, rgba(255,255,255,0.02) 0%, transparent 100%);
+    border-top: 1px solid var(--color-border-muted);
+}
+
+/* Shortcuts table */
+.shortcuts-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 24px;
+}
+
+.shortcuts-table tr {
+    border-bottom: 1px solid var(--color-border-muted);
+}
+
+.shortcuts-table tr:last-child {
+    border-bottom: none;
+}
+
+.shortcuts-table td {
+    padding: 12px 0;
+    font-size: 13px;
+}
+
+.shortcut-keys {
+    width: 100px;
+}
+
+.shortcut-keys kbd {
+    display: inline-block;
+    padding: 5px 10px;
+    background: linear-gradient(180deg, var(--color-bg-hover) 0%, var(--color-bg-elevated) 100%);
+    border: none;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-text-primary);
+    box-shadow: 0 2px 0 var(--color-border);
+}
+
+.shortcut-desc {
+    color: var(--color-text-secondary);
+}
+
+/* Loading Spinner */
+.loading-spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: none;
+    border-top-color: var(--color-accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Saved Effects List */
+#saved-overlay-content {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.saved-effect-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background-color var(--transition-fast);
+}
+
+.saved-effect-item:hover {
+    background-color: var(--color-bg-hover);
+}
+
+.saved-effect-item .effect-name {
+    flex: 1;
+    font-size: 13px;
+    color: var(--color-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.saved-effect-item .effect-date {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+}
+
+.saved-effect-item .effect-actions {
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+}
+
+.saved-effect-item:hover .effect-actions {
+    opacity: 1;
+}
+
+.saved-effect-item .action-btn.danger {
+    color: var(--color-error);
+}
+
+.saved-effect-item .action-btn.danger:hover {
+    background-color: rgba(255, 107, 107, 0.15);
+}
+
+/* About Modal */
+.about-modal {
+    width: min(720px, 100vw);
+    max-width: 720px;
+    min-width: 360px;
+    background-color: var(--color-bg-elevated);
+    border: none;
+    padding: 0;
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 var(--radius-xl);
+}
+
+.about-modal::after {
+    content: '';
+    position: absolute;
+    width: 48px;
+    height: 48px;
+    bottom: -1px;
+    right: -1px;
+    border-bottom: 2px solid var(--color-accent);
+    border-right: 2px solid var(--color-accent);
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.6;
+}
+
+.about-modal-content {
+    display: grid;
+    grid-template-columns: min(80%, 320px) 1fr;
+    align-items: stretch;
+    background-color: transparent;
+    border: none;
+}
+
+.about-modal-graphic {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2.75rem 2.5rem;
+    background: linear-gradient(135deg, var(--color-accent-muted) 0%, transparent 100%);
+}
+
+.about-modal-logo {
+    width: min(80%, 200px);
+    max-width: 200px;
+    height: auto;
+    filter: drop-shadow(0 0 20px var(--color-accent));
+}
+
+.about-modal-details {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 1rem;
+    padding: 2.75rem 1.5rem;
+    color: var(--color-text-secondary);
+    background-color: inherit;
+}
+
+.about-modal-details:focus,
+.about-modal-details:focus-visible {
+    outline: none;
+}
+
+.about-modal-title {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(2.4rem, 5vw, 3rem);
+    letter-spacing: 0.05em;
+    color: var(--color-text-primary);
+    text-shadow: 0 0 20px var(--color-accent);
+}
+
+.about-modal-tagline {
+    font-size: 1rem;
+    letter-spacing: 0.02em;
+    color: var(--color-accent);
+}
+
+.about-modal-copyright {
+    font-size: 0.9rem;
+    color: var(--color-text-muted);
+}
+
+.about-modal-link {
+    color: var(--color-accent);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+}
+
+.about-modal-link:hover {
+    color: var(--color-accent-hover);
+}
+
+@media (max-width: 720px) {
+    .about-modal {
+        width: min(540px, 94vw);
+        max-width: 540px;
+    }
+
+    .about-modal-content {
+        grid-template-columns: 1fr;
+        text-align: center;
+    }
+
+    .about-modal-graphic {
+        padding: 2.25rem 2rem 1.5rem;
+    }
+
+    .about-modal-details {
+        align-items: center;
+        padding: 1.75rem 2rem 2.25rem;
+    }
+
+    .about-modal-logo {
+        width: min(60%, 180px);
+    }
+}

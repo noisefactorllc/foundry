@@ -1,0 +1,228 @@
+/**
+ * HADES Controls
+ * Button and input control styles
+ */
+
+/* Buttons */
+.action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 14px;
+    font-family: var(--font-body);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    border: none;
+    border-radius: var(--radius-sm);
+    background-color: rgba(255, 255, 255, 0.08);
+    color: var(--color-text-primary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    position: relative;
+    overflow: hidden;
+}
+
+.action-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, transparent 50%);
+    pointer-events: none;
+}
+
+.action-btn:hover {
+    background-color: rgba(255, 255, 255, 0.12);
+    transform: translateY(-1px);
+}
+
+.action-btn:active {
+    background-color: rgba(255, 255, 255, 0.15);
+    transform: translateY(0);
+}
+
+.action-btn.primary {
+    background: linear-gradient(180deg, var(--color-accent) 0%, #00b8d9 100%);
+    color: #000;
+    font-weight: 600;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.2);
+}
+
+.action-btn.primary:hover {
+    background: linear-gradient(180deg, var(--color-accent-hover) 0%, var(--color-accent) 100%);
+    box-shadow: var(--color-accent-glow);
+}
+
+.action-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.action-btn.small {
+    padding: 6px 10px;
+    font-size: 11px;
+}
+
+.action-btn.small .icon-material {
+    font-size: 16px;
+}
+
+/* Control Button (icon buttons) */
+.control-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background-color: rgba(255, 255, 255, 0.08);
+    color: var(--color-text-primary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.control-btn:hover {
+    background-color: rgba(255, 255, 255, 0.12);
+    color: var(--color-accent);
+}
+
+.control-btn.active {
+    background-color: var(--color-accent-muted);
+    color: var(--color-accent);
+    box-shadow: 0 0 12px var(--color-accent-muted);
+}
+
+.control-btn .icon {
+    font-size: 20px;
+}
+
+/* Number Input */
+input[type="number"] {
+    width: 60px;
+    padding: 6px 8px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    background-color: rgba(0, 0, 0, 0.3);
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--color-text-primary);
+    text-align: center;
+    appearance: textfield;
+    -moz-appearance: textfield;
+    transition: background-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+input[type="number"]:focus {
+    outline: none;
+    background-color: rgba(0, 0, 0, 0.5);
+    box-shadow: 0 0 0 1px var(--color-accent-muted);
+}
+
+/* Duration Control */
+.duration-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--color-text-secondary);
+}
+
+.duration-control label {
+    font-family: var(--font-body);
+    letter-spacing: 0.02em;
+}
+
+/* FPS Display */
+.fps-display {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-text-muted);
+    font-variant-numeric: tabular-nums;
+    padding: 4px 8px;
+    background-color: rgba(0, 0, 0, 0.3);
+    border-radius: var(--radius-sm);
+}
+
+/* Noisedeck Button */
+.noisedeck-btn {
+    background: linear-gradient(180deg, #3a3a3a 0%, #2a2a2a 100%);
+    border: none;
+}
+
+.noisedeck-btn:hover {
+    background: linear-gradient(180deg, #4a4a4a 0%, #3a3a3a 100%);
+}
+
+.noisedeck-logo {
+    flex-shrink: 0;
+}
+
+/* Backend Switch (WebGL2/WebGPU toggle) */
+.backend-switch {
+    display: flex;
+}
+
+.backend-switch.hidden {
+    display: none;
+}
+
+.backend-switch:not(.hidden) {
+    align-items: center;
+    background-color: rgba(0, 0, 0, 0.4);
+    border-radius: var(--radius-sm);
+    padding: 2px;
+    gap: 2px;
+}
+
+.backend-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 10px;
+    border: none;
+    border-radius: calc(var(--radius-sm) - 2px);
+    background: transparent;
+    color: var(--color-text-muted);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.backend-btn:hover {
+    color: var(--color-text-secondary);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.backend-btn.active {
+    background: linear-gradient(180deg, rgba(0, 230, 255, 0.25) 0%, rgba(0, 180, 200, 0.25) 100%);
+    color: var(--color-accent);
+    box-shadow: 0 0 8px rgba(0, 230, 255, 0.2);
+}
+
+.backend-btn.active .backend-label {
+    text-shadow: 0 0 6px var(--color-accent);
+}
+
+.backend-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.backend-btn.webgpu-unavailable {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
