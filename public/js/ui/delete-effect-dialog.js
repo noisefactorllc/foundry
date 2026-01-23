@@ -278,7 +278,7 @@ export class DeleteEffectDialog {
         header.className = 'delete-effect-header'
         header.innerHTML = `
             <span class="delete-effect-header-icon icon-material">delete</span>
-            <span class="delete-effect-header-title">Delete Effect Workspace</span>
+            <span class="delete-effect-header-title">Delete Effect</span>
         `
 
         // Search container

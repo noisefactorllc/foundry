@@ -9,6 +9,7 @@ import { ShadeRenderer } from './noisemaker/index.js'
 import { workspaceStore, saveWorkspace, loadWorkspace, registerEffectFromWorkspace } from './workspace/index.js'
 import { FileBrowser, ParamControls, SavedEffects, keyboard, toast, helpModal, aboutModal, nameDialog, CodeEditor, deleteEffectDialog, initDocReader, toggleDocReader, showDocReader, hideDocReader, showPlaceholderContent } from './ui/index.js'
 import { OpenEffectDialog } from './ui/open-effect-dialog.js'
+import { ImportEffectDialog } from './ui/import-effect-dialog.js'
 import { WorkspaceFilesDialog } from './ui/workspace-files-dialog.js'
 import { shareModal } from './ui/share-modal.js'
 import { loadFromCode, getCodeFromUrl } from './sharingLoader.js'
@@ -29,29 +30,7 @@ import {
 
 function getDefaultDsl() {
     return `
-search synth, filter, classicNoisedeck, render, points, mixer
-
-solid(
-  r: 0,
-  g: 0,
-  b: 0
-)
-  .text(
-    text: "EffectWorkspace",
-    font: "Nunito",
-    size: 0.14,
-    color: #c3c3c3
-  )
-  .pointsEmit(attrition: 2.63)
-  .physical(
-    gravity: 0,
-    energy: 0.98,
-    drag: 0.125
-  )
-  .pointsRender(density: 100, inputIntensity: 20)
-  .chromaticAberration(aberrationAmt: 12)
-  .lens(displacement: -0.1)
-  .write(o0)
+search filter, classicNoisedeck
 
 pattern(
   patternType: grid,
@@ -60,11 +39,12 @@ pattern(
   animation: panUp,
   color1: #222222
 )
-  .blendMode(tex: read(o0), mixAmt: -4.56)
+  .chromaticAberration(aberrationAmt: 12)
+  .lens(displacement: -0.1)
   .vignette(brightness: 0.12)
-  .write(o1)
+  .write(o0)
 
-render(o1)
+render(o0)
 `
 }
 
@@ -360,7 +340,124 @@ async function refreshEffectDialog() {
     openEffectDialog.setEffects(allEffects)
 }
 
+// =========================================================================
+// Import from ZIP Dialog
+// =========================================================================
 
+const importEffectDialog = new ImportEffectDialog()
+
+// Set up the callback for when an effect is imported from ZIP
+importEffectDialog.onEffectImport(async ({ name, files }) => {
+    // Clear workspace
+    workspaceStore.files.clear()
+    workspaceStore.name = name
+
+    // Load files into workspace, converting definition.js to definition.json if needed
+    for (const [path, content] of Object.entries(files)) {
+        if (path === 'definition.js') {
+            // Convert JS definition to JSON format
+            const jsonDef = convertDefinitionJsToJson(content, name)
+            workspaceStore.files.set('definition.json', jsonDef)
+        } else if (path === 'definition.json') {
+            workspaceStore.files.set(path, content)
+        } else {
+            workspaceStore.files.set(path, content)
+        }
+    }
+
+    // Set DSL from the imported dsl.txt, or generate one from the effect name
+    let dsl = workspaceStore.files.get('dsl.txt')
+    if (!dsl) {
+        // Generate a simple DSL that invokes the effect
+        dsl = `search user\n\n${name}().write(o0)`
+        workspaceStore.files.set('dsl.txt', dsl)
+    }
+
+    // Register the effect (pass DSL so it can detect starter usage)
+    await registerEffectFromWorkspace(null, dsl)
+
+    if (dslEditor) {
+        dslEditor.value = dsl
+    }
+
+    // Save to current workspace slot and compile
+    await saveWorkspace(workspaceStore)
+    await compileAndRun()
+
+    // Update file browser and effect dialog
+    fileBrowser?.render()
+    await refreshEffectDialog()
+
+    toast.success(`Imported: ${name}`)
+})
+
+/**
+ * Convert a definition.js class file to definition.json format
+ * @param {string} jsContent - The JS class content
+ * @param {string} fallbackName - Fallback effect name
+ * @returns {string} JSON definition
+ */
+function convertDefinitionJsToJson(jsContent, fallbackName) {
+    const def = {
+        name: fallbackName,
+        namespace: 'user',
+        func: fallbackName,
+        description: '',
+        tags: ['user'],
+        globals: {},
+        passes: []
+    }
+
+    // Extract name
+    const nameMatch = jsContent.match(/name\s*[=:]\s*['"]([^'"]+)['"]/)
+    if (nameMatch) def.name = nameMatch[1]
+
+    // Extract func
+    const funcMatch = jsContent.match(/func\s*[=:]\s*['"]([^'"]+)['"]/)
+    if (funcMatch) def.func = funcMatch[1]
+    else def.func = def.name
+
+    // Extract namespace
+    const nsMatch = jsContent.match(/namespace\s*[=:]\s*['"]([^'"]+)['"]/)
+    if (nsMatch) def.namespace = nsMatch[1]
+
+    // Extract description
+    const descMatch = jsContent.match(/description\s*[=:]\s*['"]([^'"]+)['"]/)
+    if (descMatch) def.description = descMatch[1]
+
+    // Extract globals - look for globals = { ... } or globals: { ... }
+    const globalsMatch = jsContent.match(/globals\s*[=:]\s*(\{[\s\S]*?\})\s*[;,]?\s*(?=\n\s*(?:passes|constructor|\})|$)/)
+    if (globalsMatch) {
+        try {
+            // Try to parse the globals object
+            def.globals = eval('(' + globalsMatch[1] + ')')
+        } catch (e) {
+            console.warn('[Import] Could not parse globals:', e)
+        }
+    }
+
+    // Extract passes
+    const passesMatch = jsContent.match(/passes\s*[=:]\s*(\[[\s\S]*?\])\s*[;,]?\s*(?=\n\s*(?:globals|constructor|\})|$)/)
+    if (passesMatch) {
+        try {
+            def.passes = eval('(' + passesMatch[1] + ')')
+        } catch (e) {
+            console.warn('[Import] Could not parse passes:', e)
+        }
+    }
+
+    // Extract tags
+    const tagsMatch = jsContent.match(/tags\s*[=:]\s*(\[[^\]]*\])/)
+    if (tagsMatch) {
+        try {
+            def.tags = eval('(' + tagsMatch[1] + ')')
+        } catch (e) {
+            console.warn('[Import] Could not parse tags:', e)
+        }
+    }
+
+    return JSON.stringify(def, null, 2)
+}
 
 // =========================================================================
 // Effect Loading
@@ -855,7 +952,7 @@ async function init() {
         
         paramControls.setProgramState(renderer.programState, 'step_0')
         
-        console.log('Effect Workspace initialized')
+        console.log('Foundry initialized')
         console.log(`Loaded ${renderer.getEffectIds().length} effects from manifest`)
         
         // Populate effect list for dialog (will be updated with user effects later)
@@ -1078,7 +1175,7 @@ async function init() {
         hideLoadingScreen()
         
         setTimeout(() => {
-            toast.success('Effect Workspace ready')
+            toast.success('Foundry ready')
         }, 500)
     } catch (err) {
         handleError(err, ErrorType.UNKNOWN)
@@ -1212,6 +1309,15 @@ function setupMenuBar() {
     if (importFromLibraryMenuItem) {
         importFromLibraryMenuItem.addEventListener('click', () => {
             openEffectDialog.open()
+            menu.querySelectorAll('.menu-items').forEach(el => el.classList.add('hide'))
+        })
+    }
+
+    // Import from ZIP menu item
+    const importFromZipMenuItem = document.getElementById('importFromZipMenuItem')
+    if (importFromZipMenuItem) {
+        importFromZipMenuItem.addEventListener('click', () => {
+            importEffectDialog.open()
             menu.querySelectorAll('.menu-items').forEach(el => el.classList.add('hide'))
         })
     }
@@ -1623,8 +1729,8 @@ async function handleEditInShade() {
         // Build payload
         const payload = {
             dsl,
-            title: workspaceStore.name || 'Effect Workspace',
-            description: 'Created with Effect Workspace',
+            title: workspaceStore.name || 'Foundry',
+            description: 'Created with Foundry',
             ttlMinutes: 60
         }
         if (screenshot) payload.screenshot = screenshot
@@ -1764,8 +1870,8 @@ async function handleEditInNoisedeck() {
         // Build payload
         const payload = {
             dsl,
-            title: workspaceStore.name || 'Effect Workspace',
-            description: 'Created with Effect Workspace',
+            title: workspaceStore.name || 'Foundry',
+            description: 'Created with Foundry',
             ttlMinutes: 60
         }
         if (screenshot) payload.screenshot = screenshot

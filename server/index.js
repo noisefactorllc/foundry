@@ -73,7 +73,7 @@ app.listen(PORT, HOST, () => {
     console.log(`
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
-║   Effect Workspace                                        ║
+║   Foundry                                                 ║
 ║   Hot-reload Effects Editor                               ║
 ║   http://${HOST}:${PORT}                                      ║
 ║                                                           ║

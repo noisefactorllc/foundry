@@ -585,6 +585,7 @@ body {
 
 /* Doc Reader Markdown Styling */
 #doc-reader-content h1 {
+    font-family: var(--font-logotype);
     font-size: 1.25rem;
     font-weight: 700;
     margin: 0 0 0.75rem;
@@ -592,6 +593,7 @@ body {
 }
 
 #doc-reader-content h2 {
+    font-family: var(--font-logotype);
     font-size: 1rem;
     font-weight: 600;
     margin: 1rem 0 0.5rem;
@@ -599,6 +601,7 @@ body {
 }
 
 #doc-reader-content h3 {
+    font-family: var(--font-logotype);
     font-size: 0.875rem;
     font-weight: 600;
     margin: 0.875rem 0 0.375rem;

@@ -1,4 +1,4 @@
-# Effect Workspace
+# Foundry
 
 A pure effects editor with hot reload capability.
 

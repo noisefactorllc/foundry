@@ -127,11 +127,13 @@ export function renderDocContent(markdown) {
  * Show placeholder documentation content
  */
 export function showPlaceholderContent() {
-    const placeholder = `# Welcome to Effect Workspace
+    const placeholder = `# Welcome to Foundry
 
 ## By [Noise Factor](https://noisefactor.io)
 
-Effect Workspace is a distraction-free editor for portable GLSL and WGSL shader effects. Effects you create here work across the entire Noise Factor ecosystem including [Noisedeck](https://noisedeck.app), [Polymorphic](https://polymorphic.noisedeck.app), and [Shade](https://shade.noisedeck.app).
+Foundry is a distraction-free editor for portable GLSL and WGSL shader effects. Effects you create here work across the entire Noise Factor ecosystem, and can be modified to run anywhere shaders are used.
+
+Based on the [Portable Effect Format](https://github.com/noisedeck/portable).
 
 ---
 
@@ -143,11 +145,13 @@ A portable effect is a folder containing shader files and a JSON definition:
 my-effect/
 ├── definition.json     # Effect metadata & parameters
 ├── glsl/
-│   └── main.glsl       # WebGL shader
+│   └── main.glsl       # WebGL shader*
 ├── wgsl/
-│   └── main.wgsl       # WebGPU shader (optional)
+│   └── main.wgsl       # WebGPU shader*
 └── help.md             # Documentation (optional)
 \`\`\`
+
+Backend may be implemented in either GLSL or WGSL, or both. We recommend developing in one or the other and then porting when the effect is finished. Check out [Shade](https://shade.noisedeck.app) to automatically convert between languages.
 
 ---
 
@@ -409,7 +413,7 @@ render(o0)
 
 ---
 
-*For complete documentation, see [portable/](https://github.com/noisefactor/portable)*
+*For complete documentation, see [portable](https://github.com/noisedeck/portable)*
 `
     renderDocContent(placeholder)
 }

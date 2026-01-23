@@ -261,8 +261,8 @@ export class ShareModal {
             
             const payload = {
                 dsl,
-                title: title || workspaceStore.name || 'Effect Workspace',
-                description: description || 'Created with Effect Workspace'
+                title: title || workspaceStore.name || 'Foundry',
+                description: description || 'Created with Foundry'
             }
 
             if (screenshot) {
@@ -368,7 +368,7 @@ export class ShareModal {
      * @private
      */
     _createModal() {
-        const effectName = workspaceStore.name || 'Effect Workspace'
+        const effectName = workspaceStore.name || 'Foundry'
 
         this.modal = document.createElement('div')
         this.modal.className = 'modal-overlay'
