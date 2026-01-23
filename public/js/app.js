@@ -11,6 +11,7 @@ import { FileBrowser, ParamControls, SavedEffects, keyboard, toast, helpModal, a
 import { OpenEffectDialog } from './ui/open-effect-dialog.js'
 import { WorkspaceFilesDialog } from './ui/workspace-files-dialog.js'
 import { shareModal } from './ui/share-modal.js'
+import { loadFromCode, getCodeFromUrl } from './sharingLoader.js'
 import { 
     errorHandler, 
     handleError,
@@ -84,7 +85,8 @@ function updateLoadingStatus(status) {
 function updateMenuFilename() {
     const menuFilenameEl = document.getElementById('menuFilename')
     if (menuFilenameEl) {
-        menuFilenameEl.textContent = canvasEditorCurrentFile || 'dsl.txt'
+        // Only show filename when editor is visible
+        menuFilenameEl.textContent = canvasEditorVisible ? (canvasEditorCurrentFile || 'dsl.txt') : ''
     }
 }
 
@@ -390,8 +392,8 @@ async function loadEffectToWorkspace(effectId, newName) {
             : manifestEntry.hasTex === true
 
         const definitionMeta = {
-            name: instance.name,
-            func: instance.func,
+            name: name,  // Use the provided/derived name
+            func: name,  // Use the provided/derived name as func
             namespace: 'user',  // Use 'user' namespace for imported effects
             originalNamespace: effect.namespace,  // Keep original for reference
             description: instance.description || '',
@@ -405,15 +407,36 @@ async function loadEffectToWorkspace(effectId, newName) {
             outputTex3d: instance.outputTex3d || null,
             outputGeo: instance.outputGeo || null
         }
+
+        // For simple single-pass effects, rename the program to match the new effect name
+        // Build a mapping from old program names to new ones
+        const originalFunc = instance.func || instance.name
+        const programRenameMap = {}
+        
+        // If passes reference the original func name, map it to the new name
+        if (definitionMeta.passes && definitionMeta.passes.length > 0) {
+            definitionMeta.passes = definitionMeta.passes.map(pass => {
+                const newPass = { ...pass }
+                // If pass program matches original func, rename to new name
+                if (pass.program === originalFunc) {
+                    programRenameMap[originalFunc] = name
+                    newPass.program = name
+                }
+                return newPass
+            })
+        }
+
         workspaceStore.setFile('definition.json', JSON.stringify(definitionMeta, null, 2))
 
         if (instance.shaders) {
             for (const [prog, shaderSet] of Object.entries(instance.shaders)) {
+                // Use renamed program name if applicable
+                const newProg = programRenameMap[prog] || prog
                 if (shaderSet.glsl) {
-                    workspaceStore.setFile(`glsl/${prog}.glsl`, shaderSet.glsl)
+                    workspaceStore.setFile(`glsl/${newProg}.glsl`, shaderSet.glsl)
                 }
                 if (shaderSet.wgsl) {
-                    workspaceStore.setFile(`wgsl/${prog}.wgsl`, shaderSet.wgsl)
+                    workspaceStore.setFile(`wgsl/${newProg}.wgsl`, shaderSet.wgsl)
                 }
             }
         }
@@ -649,11 +672,12 @@ function toggleCanvasEditor() {
     
     if (isHidden && canvasEditor) {
         canvasEditorCurrentFile = 'dsl.txt'
-        updateMenuFilename()
         canvasEditor.value = dslEditor?.value || ''
         canvasEditor.focus()
     }
     
+    // Update menu filename (shows/hides based on editor visibility)
+    updateMenuFilename()
     updateOverlayToggleStates()
 }
 
@@ -905,6 +929,90 @@ async function init() {
             }
         }
 
+        // Check for shared composition code in URL
+        const shareCode = getCodeFromUrl()
+        if (shareCode) {
+            updateLoadingStatus('Loading shared composition')
+            try {
+                const composition = await loadFromCode(shareCode)
+                console.log('[Workspace] Loaded shared composition:', composition.title || shareCode)
+                
+                // Populate workspace with effect files from rawEffects
+                if (composition.rawEffects && composition.rawEffects.length > 0) {
+                    const effectData = composition.rawEffects[0]
+                    console.log('[Workspace] Populating workspace from shared effect:', effectData.name)
+                    
+                    // Clear existing workspace
+                    workspaceStore.clear()
+                    workspaceStore.name = effectData.name || 'Shared Effect'
+                    
+                    // Create definition.json from effect data
+                    const definition = {
+                        name: effectData.name,
+                        func: effectData.func || effectData.name,
+                        namespace: effectData.namespace || 'synth',
+                        author: effectData.author || '',
+                        description: effectData.description || '',
+                        globals: effectData.globals || {},
+                        passes: effectData.passes || []
+                    }
+                    workspaceStore.setFile('definition.json', JSON.stringify(definition, null, 2))
+                    
+                    // Extract shader files from the shaders object
+                    if (effectData.shaders) {
+                        for (const [programName, programShaders] of Object.entries(effectData.shaders)) {
+                            if (programShaders.glsl) {
+                                workspaceStore.setFile(`glsl/${programName}.glsl`, programShaders.glsl)
+                            }
+                            if (programShaders.wgsl) {
+                                workspaceStore.setFile(`wgsl/${programName}.wgsl`, programShaders.wgsl)
+                            }
+                        }
+                    }
+                    
+                    // Add help.md if present
+                    if (effectData.help) {
+                        workspaceStore.setFile('help.md', effectData.help)
+                    }
+                    
+                    // Checkpoint the initial state
+                    workspaceStore.checkpoint('Loaded from share')
+                    
+                    // Update file browser UI
+                    fileBrowser.render()
+                    
+                    console.log('[Workspace] Workspace populated with files:', 
+                        Array.from(workspaceStore.files.keys()))
+                }
+                
+                // Set DSL from composition
+                const dsl = composition.dsl || getDefaultDsl()
+                dslEditor.value = dsl
+                if (canvasEditor) {
+                    canvasEditor.value = dsl
+                    canvasEditorCurrentFile = 'dsl.txt'
+                }
+                workspaceStore.setFile('dsl.txt', dsl)
+                
+                // Clear the URL parameter to prevent reload loop
+                const url = new URL(window.location.href)
+                url.searchParams.delete('code')
+                window.history.replaceState({}, '', url.toString())
+                
+                // Compile and run
+                await compileAndRun()
+                renderer.start()
+                
+                // Show notification
+                setTimeout(() => {
+                    toast.info(`Loaded: ${composition.title || 'Shared effect'}`)
+                }, 600)
+            } catch (err) {
+                console.error('[Workspace] Failed to load shared composition:', err)
+                toast.error(`Failed to load shared effect: ${err.message}`)
+            }
+        }
+
         const uiState = loadUIState()
         if (uiState.dsl && !restored) {
             dslEditor.value = uiState.dsl
@@ -1108,6 +1216,27 @@ function setupMenuBar() {
         })
     }
 
+    // New effect menu item
+    const newEffectMenuItem = document.getElementById('newEffectMenuItem')
+    if (newEffectMenuItem) {
+        newEffectMenuItem.addEventListener('click', async () => {
+            menu.querySelectorAll('.menu-items').forEach(el => el.classList.add('hide'))
+            const name = await nameDialog.show({
+                title: 'New Effect',
+                label: 'Effect Name',
+                value: '',
+                placeholder: 'Enter effect name...',
+                confirmText: 'Create'
+            })
+            if (name) {
+                // Import synth.solid as the starting point under user namespace
+                await loadEffectToWorkspace('synth/solid', name)
+                await compileAndRun()
+                toast.success(`Created: ${name}`)
+            }
+        })
+    }
+
     // Workspace files menu item
     const workspaceFilesMenuItem = document.getElementById('workspaceFilesMenuItem')
     if (workspaceFilesMenuItem) {
@@ -1168,11 +1297,29 @@ function setupMenuBar() {
         })
     }
 
+    // Show DSL code menu item
+    const showDslMenuItem = document.getElementById('showDslMenuItem')
+    if (showDslMenuItem) {
+        showDslMenuItem.addEventListener('click', () => {
+            toggleCanvasEditor()
+            menu.querySelectorAll('.menu-items').forEach(el => el.classList.add('hide'))
+        })
+    }
+
     // Edit in Noisedeck menu item
     const editInNoisedeckMenuItem = document.getElementById('editInNoisedeckMenuItem')
     if (editInNoisedeckMenuItem) {
         editInNoisedeckMenuItem.addEventListener('click', () => {
             handleEditInNoisedeck()
+            menu.querySelectorAll('.menu-items').forEach(el => el.classList.add('hide'))
+        })
+    }
+
+    // Edit in Shade menu item
+    const editInShadeMenuItem = document.getElementById('editInShadeMenuItem')
+    if (editInShadeMenuItem) {
+        editInShadeMenuItem.addEventListener('click', () => {
+            handleEditInShade()
             menu.querySelectorAll('.menu-items').forEach(el => el.classList.add('hide'))
         })
     }
@@ -1337,6 +1484,151 @@ async function handleExport() {
 // Edit in Noisedeck
 const SHARE_API_URL = 'https://sharing.noisedeck.app/api/embed/shorten'
 const NOISEDECK_URL = 'https://preview.noisedeck.app'
+const SHADE_URL = 'https://shade.noisedeck.app'
+
+/**
+ * Share the effect and open Shade in a new window
+ */
+async function handleEditInShade() {
+    // Get DSL with current parameter values
+    let dsl = dslEditor.value
+    if (!dsl) {
+        toast.warning('Nothing to edit. Create an effect first!')
+        return
+    }
+    
+    // Try to get DSL with current param values from programState
+    if (renderer?.programState?.toDsl) {
+        try {
+            const dslWithParams = renderer.programState.toDsl()
+            if (dslWithParams && dslWithParams.trim()) {
+                dsl = dslWithParams
+            }
+        } catch (err) {
+            console.warn('[Shade] Failed to get DSL from programState:', err)
+        }
+    }
+    
+    toast.info('Opening in Shade...')
+    
+    try {
+        // Capture screenshot
+        let screenshot = null
+        try {
+            const targetWidth = 1200
+            const targetHeight = 630
+            const tempCanvas = document.createElement('canvas')
+            tempCanvas.width = targetWidth
+            tempCanvas.height = targetHeight
+            const ctx = tempCanvas.getContext('2d')
+            const sourceAspect = canvas.width / canvas.height
+            const targetAspect = targetWidth / targetHeight
+            let sx, sy, sw, sh
+            if (sourceAspect > targetAspect) {
+                sh = canvas.height
+                sw = canvas.height * targetAspect
+                sx = (canvas.width - sw) / 2
+                sy = 0
+            } else {
+                sw = canvas.width
+                sh = canvas.width / targetAspect
+                sx = 0
+                sy = (canvas.height - sh) / 2
+            }
+            ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, targetWidth, targetHeight)
+            screenshot = tempCanvas.toDataURL('image/jpeg', 0.85)
+        } catch (err) {
+            console.warn('[Shade] Screenshot capture failed:', err)
+        }
+        
+        // Create effect ZIP if we have workspace files
+        let effectZip = null
+        const files = workspaceStore.toObject()
+        const defJson = files['definition.json']
+        const glslFiles = Object.keys(files).filter(p => p.startsWith('glsl/') && p.endsWith('.glsl'))
+        const wgslFiles = Object.keys(files).filter(p => p.startsWith('wgsl/') && p.endsWith('.wgsl'))
+        
+        if (defJson && (glslFiles.length > 0 || wgslFiles.length > 0)) {
+            try {
+                // Load JSZip if needed
+                if (!window.JSZip) {
+                    await new Promise((resolve, reject) => {
+                        const script = document.createElement('script')
+                        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'
+                        script.onload = resolve
+                        script.onerror = () => reject(new Error('Failed to load JSZip'))
+                        document.head.appendChild(script)
+                    })
+                }
+                
+                const zip = new window.JSZip()
+                zip.file('definition.json', defJson)
+                
+                // Add all GLSL shaders
+                for (const path of glslFiles) {
+                    zip.file(path, files[path])
+                }
+                
+                // Add all WGSL shaders
+                for (const path of wgslFiles) {
+                    zip.file(path, files[path])
+                }
+                
+                // Add help.md if present
+                if (files['help.md']) {
+                    zip.file('help.md', files['help.md'])
+                }
+                
+                const zipBlob = await zip.generateAsync({ type: 'blob' })
+                const reader = new FileReader()
+                effectZip = await new Promise((resolve, reject) => {
+                    reader.onload = () => resolve(reader.result.split(',')[1])
+                    reader.onerror = reject
+                    reader.readAsDataURL(zipBlob)
+                })
+                
+                console.log('[Shade] Created effect ZIP with files:', 
+                    ['definition.json', ...glslFiles, ...wgslFiles, files['help.md'] ? 'help.md' : null].filter(Boolean))
+            } catch (err) {
+                console.warn('[Shade] Effect ZIP creation failed:', err)
+            }
+        }
+        
+        // Build payload
+        const payload = {
+            dsl,
+            title: workspaceStore.name || 'Effect Workspace',
+            description: 'Created with Effect Workspace',
+            ttlMinutes: 60
+        }
+        if (screenshot) payload.screenshot = screenshot
+        if (effectZip) payload.effects = [effectZip]
+        
+        // Upload to sharing service
+        const response = await fetch(SHARE_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}))
+            throw new Error(errorData.details || errorData.error || `HTTP ${response.status}`)
+        }
+        
+        const result = await response.json()
+        console.log('[Shade] Share result:', result)
+        
+        // Open Shade with the short code
+        const shadeUrl = `${SHADE_URL}/?code=${result.code}`
+        window.open(shadeUrl, '_blank')
+        
+        toast.success('Opened in Shade')
+    } catch (error) {
+        console.error('[Shade] Error:', error)
+        toast.error(`Failed to open in Shade: ${error.message}`)
+    }
+}
 
 /**
  * Share the effect and open Noisedeck in a new window
@@ -1398,8 +1690,9 @@ async function handleEditInNoisedeck() {
         const files = workspaceStore.toObject()
         const defJson = files['definition.json']
         const glslFiles = Object.keys(files).filter(p => p.startsWith('glsl/') && p.endsWith('.glsl'))
+        const wgslFiles = Object.keys(files).filter(p => p.startsWith('wgsl/') && p.endsWith('.wgsl'))
         
-        if (defJson && glslFiles.length > 0) {
+        if (defJson && (glslFiles.length > 0 || wgslFiles.length > 0)) {
             try {
                 // Load JSZip if needed
                 if (!window.JSZip) {
@@ -1414,9 +1707,22 @@ async function handleEditInNoisedeck() {
                 
                 const zip = new window.JSZip()
                 zip.file('definition.json', defJson)
+                
+                // Add all GLSL shaders
                 for (const path of glslFiles) {
                     zip.file(path, files[path])
                 }
+                
+                // Add all WGSL shaders
+                for (const path of wgslFiles) {
+                    zip.file(path, files[path])
+                }
+                
+                // Add help.md if present
+                if (files['help.md']) {
+                    zip.file('help.md', files['help.md'])
+                }
+                
                 const zipBlob = await zip.generateAsync({ type: 'blob' })
                 const reader = new FileReader()
                 effectZip = await new Promise((resolve, reject) => {

@@ -20,9 +20,10 @@ import { workspaceStore } from './workspace-store.js'
  * Re-register an effect from the current workspace with the noisemaker runtime.
  * Call this after loading a workspace that contains a custom effect.
  * @param {object} [renderer] - Optional ShadeRenderer instance to register with
+ * @param {string} [dslOverride] - Optional DSL to use for starter detection (if not provided, reads from workspace)
  * @returns {boolean} Whether registration was successful
  */
-export function registerEffectFromWorkspace(renderer = null) {
+export function registerEffectFromWorkspace(renderer = null, dslOverride = null) {
     const defJson = workspaceStore.getFile('definition.json')
     if (!defJson) {
         console.log('[Workspace] No definition.json found, skipping registration')
@@ -107,10 +108,26 @@ export function registerEffectFromWorkspace(renderer = null) {
             args: args
         }
         console.log('[Workspace] Registering op:', opName, 'with args:', args.map(a => a.name))
+        
+        // Register the op
         registerOp(opName, opSpec)
         
-        // Only register as starter if it IS a starter effect
-        const isStarter = def.starter === true
+        // Detect if effect is used as a starter in DSL
+        // An effect is a starter if it appears at the beginning of a chain (not chained from something else)
+        let isStarter = def.starter === true
+        
+        // Check DSL to see if effect is actually used as a starter
+        const dsl = dslOverride || workspaceStore.getFile('dsl.txt')
+        if (dsl && !isStarter) {
+            // Look for the effect name at the start of a line (not chained with .)
+            // Pattern: effectname() at start of line, possibly with namespace prefix
+            const effectPattern = new RegExp(`^\\s*(${name}|${namespace}\\.${name}|${namespace}/${name})\\s*\\(`, 'm')
+            if (effectPattern.test(dsl)) {
+                console.log('[Workspace] DSL uses effect as starter, overriding stored starter value')
+                isStarter = true
+            }
+        }
+        
         if (isStarter) {
             registerStarterOps([opName])
         }
@@ -171,11 +188,10 @@ export function registerEffectFromWorkspace(renderer = null) {
             outputGeo: def.outputGeo || null
         }
 
-        // Register the effect with the global registry under multiple keys
+        // Register the effect with the global registry under namespace-qualified keys only
+        // Do NOT register by just function name to avoid overwriting built-in effects
         registerEffect(opName, effectDef)
         registerEffect(`${namespace}/${name}`, effectDef)
-        // Also register with just the function name for lookups without namespace
-        registerEffect(name, effectDef)
 
         // Also register with the renderer's loaded effects cache if provided
         // This is critical for compile() to find the effect without trying to load from bundles
