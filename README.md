@@ -81,6 +81,15 @@ noise(scale: 100, animation: panUp)
 render(o0)
 ```
 
+## Portable Effects
+
+Workspace supports the Portable Effects Format for creating and sharing custom shader effects.
+
+See the **[Portable Effects Format](https://github.com/noisedeck/portable)** repository for:
+- Effect format specification
+- Parameter definitions
+- Example effects
+
 ## License
 
 MIT
