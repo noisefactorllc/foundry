@@ -131,50 +131,252 @@ export function showPlaceholderContent() {
 
 ## By [Noise Factor](https://noisefactor.io)
 
-Effect Workspace is a distraction-free editor for GLSL and WGSL shaders authored in Noise Factor's [effect definition format](https://noisemaker.readthedocs.io/en/latest/shaders/effects.html). This is a *low-level* editor that directly exposes the underlying shader code running on GPU metal -- serious and unforgiving business. For a more lighthearted and high-level kind of experimentation, we encourage you to check out [Polymorphic](https://polymorphic.noisedeck.app), and of course our flagship app [Noisedeck](https://noisedeck.app). For our agentic shader coding assistant, check out [Shade](https://noisedeck.app/?slide=7).
+Effect Workspace is a distraction-free editor for portable GLSL and WGSL shader effects. Effects you create here work across the entire Noise Factor ecosystem including [Noisedeck](https://noisedeck.app), [Polymorphic](https://polymorphic.noisedeck.app), and [Shade](https://shade.noisedeck.app).
 
 ---
 
 ## Quick Start
 
-An Effect is a self-contained unit that transforms inputs to outputs using one or more render or compute passes.
+A portable effect is a folder containing shader files and a JSON definition:
 
-\`\`\`javascript
-import { Effect } from '../../../src/runtime/effect.js';
-
-export default new Effect({
-  name: "Invert",
-  namespace: "filter",
-  func: "inv",
-  passes: [
-    {
-      name: "main",
-      program: "invert",
-      inputs: { inputTex: "inputTex" },
-      outputs: { fragColor: "outputTex" }
-    }
-  ]
-});
 \`\`\`
-
-That's a minimal working effect. Of course, it needs shader code to actually do something. The shader files go in \`glsl/\` and \`wgsl/\` subdirectories alongside the effect definition file.
+my-effect/
+├── definition.json     # Effect metadata & parameters
+├── glsl/
+│   └── main.glsl       # WebGL shader
+├── wgsl/
+│   └── main.wgsl       # WebGPU shader (optional)
+└── help.md             # Documentation (optional)
+\`\`\`
 
 ---
 
-## Effect Properties
+## definition.json
 
-### Required
+The definition file describes your effect's identity, parameters, and rendering structure.
 
-- **name** — Display name for the effect
-- **passes** — One or more render/compute passes
+### Minimal Example
 
-### Optional
+\`\`\`json
+{
+  "name": "My Effect",
+  "func": "myEffect"
+}
+\`\`\`
 
-- **namespace** — Logical grouping: \`synth\`, \`filter\`, \`mixer\`, \`sim\`, \`synth3d\`, \`filter3d\`
-- **func** — DSL function name (defaults to lowercase \`name\`)
-- **tags** — Categorization: \`color\`, \`distort\`, \`geometric\`, \`noise\`, \`transform\`, \`util\`, \`agents\`, \`sim\`, \`3d\`
-- **globals** — Uniform parameters exposed to shaders and UI
-- **textures** — Internal render targets
+### Complete Example
+
+\`\`\`json
+{
+  "name": "Plasma Wave",
+  "func": "plasmaWave",
+  "namespace": "synth",
+  "description": "Animated plasma effect",
+  "starter": true,
+  "tags": ["noise", "animation"],
+  "globals": {
+    "scale": {
+      "type": "float",
+      "default": 2.0,
+      "min": 0.1,
+      "max": 10.0
+    },
+    "color": {
+      "type": "vec3",
+      "default": [1.0, 0.5, 0.0]
+    }
+  },
+  "passes": [
+    {
+      "name": "render",
+      "program": "main",
+      "inputs": {},
+      "outputs": { "fragColor": "outputTex" }
+    }
+  ]
+}
+\`\`\`
+
+---
+
+## Required Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| \`name\` | string | Display name for the effect |
+| \`func\` | string | DSL function name (camelCase) |
+
+---
+
+## Optional Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| \`namespace\` | string | \`"synth"\` | Effect category |
+| \`description\` | string | \`""\` | Brief description |
+| \`starter\` | boolean | \`false\` | True if generates from nothing |
+| \`hasTex\` | boolean | \`false\` | True if accepts texture input |
+| \`tags\` | array | \`[]\` | Categorization tags |
+| \`globals\` | object | \`{}\` | Parameters/uniforms |
+| \`passes\` | array | auto | Render pass configuration |
+
+---
+
+## Parameters (globals)
+
+Parameters expose shader uniforms to the UI and DSL:
+
+\`\`\`json
+"globals": {
+  "intensity": {
+    "type": "float",
+    "default": 1.0,
+    "min": 0.0,
+    "max": 2.0
+  },
+  "mode": {
+    "type": "int",
+    "default": 0,
+    "choices": {
+      "normal": 0,
+      "inverted": 1,
+      "saturated": 2
+    }
+  }
+}
+\`\`\`
+
+### Supported Types
+
+| Type | GLSL Type | Default Format | UI Control |
+|------|-----------|----------------|------------|
+| \`float\` | \`float\` | \`1.0\` | Slider |
+| \`int\` | \`int\` | \`4\` | Slider |
+| \`boolean\` | \`bool\` | \`true\` | Toggle |
+| \`vec2\` | \`vec2\` | \`[0.5, 0.5]\` | XY pad |
+| \`vec3\` | \`vec3\` | \`[1.0, 0.0, 0.5]\` | Color picker |
+| \`vec4\` / \`color\` | \`vec4\` | \`[1, 0, 0.5, 1]\` | Color picker |
+
+### Parameter Properties
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| \`type\` | string | Yes | Data type |
+| \`default\` | varies | Yes | Default value |
+| \`uniform\` | string | No | GLSL uniform name |
+| \`min\` | number | No | Minimum value |
+| \`max\` | number | No | Maximum value |
+| \`step\` | number | No | Slider increment |
+| \`choices\` | object | No | Enum options |
+
+---
+
+## Writing Shaders
+
+### GLSL Template
+
+\`\`\`glsl
+#version 300 es
+precision highp float;
+
+uniform vec2 resolution;
+uniform float time;
+
+in vec2 vUv;
+out vec4 fragColor;
+
+void main() {
+    vec2 uv = vUv;
+    vec3 color = vec3(uv, 0.5);
+    fragColor = vec4(color, 1.0);
+}
+\`\`\`
+
+### Built-in Uniforms
+
+| Uniform | Type | Description |
+|---------|------|-------------|
+| \`resolution\` | \`vec2\` | Canvas size in pixels |
+| \`time\` | \`float\` | Normalized time 0.0–1.0 |
+| \`aspectRatio\` | \`float\` | Width / height |
+| \`frame\` | \`int\` | Current frame number |
+| \`mouse\` | \`vec4\` | Mouse state |
+
+### Texture Coordinates
+
+\`vUv\` provides normalized coordinates:
+- Origin: bottom-left (0, 0)
+- Top-right: (1, 1)
+- Center: (0.5, 0.5)
+
+\`\`\`glsl
+// Center at origin, aspect-corrected
+vec2 centered = (vUv - 0.5) * vec2(aspectRatio, 1.0);
+\`\`\`
+
+---
+
+## Multi-Pass Effects
+
+For complex effects requiring multiple render passes:
+
+\`\`\`json
+{
+  "name": "Blur",
+  "func": "blur",
+  "textures": {
+    "_temp": { "width": "input", "height": "input" }
+  },
+  "passes": [
+    {
+      "name": "blurH",
+      "program": "blurH",
+      "inputs": { "inputTex": "inputTex" },
+      "outputs": { "fragColor": "_temp" }
+    },
+    {
+      "name": "blurV",
+      "program": "blurV",
+      "inputs": { "inputTex": "_temp" },
+      "outputs": { "fragColor": "outputTex" }
+    }
+  ]
+}
+\`\`\`
+
+---
+
+## Effect Types
+
+### Starter Effects
+
+Generate output from nothing (noise, shapes, patterns):
+
+\`\`\`json
+{
+  "name": "Noise",
+  "starter": true,
+  "passes": [{
+    "inputs": {},
+    "outputs": { "fragColor": "outputTex" }
+  }]
+}
+\`\`\`
+
+### Filter Effects
+
+Process an input texture:
+
+\`\`\`json
+{
+  "name": "Invert",
+  "hasTex": true,
+  "passes": [{
+    "inputs": { "inputTex": "inputTex" },
+    "outputs": { "fragColor": "outputTex" }
+  }]
+}
+\`\`\`
 
 ---
 
@@ -182,271 +384,32 @@ That's a minimal working effect. Of course, it needs shader code to actually do 
 
 | Namespace | Description |
 |-----------|-------------|
-| \`synth\` | 2D generator modules |
-| \`filter\` | Apply special effects to 2D input |
-| \`mixer\` | Blend two sources from A to B |
-| \`sim\` | Simulations with temporal state |
-| \`synth3d\` | 3D volumetric generators |
-| \`filter3d\` | 3D volumetric processors |
-| \`classicNoisedeck\` | Ported from original noisedeck.app |
-| \`classicNoisemaker\` | Shader implementations of classic noisemaker effects |
+| \`synth\` | 2D generators |
+| \`filter\` | 2D processors |
+| \`mixer\` | Blend two sources |
+| \`sim\` | Temporal simulations |
+| \`synth3d\` | 3D volume generators |
+| \`filter3d\` | 3D volume processors |
 
 ---
 
-## Globals (Uniforms)
+## Using Effects in DSL
 
-Parameters exposed to both shaders and editor UI:
-
-\`\`\`javascript
-globals: {
-  intensity: {
-    type: "float",
-    default: 0.5,
-    min: 0,
-    max: 1,
-    ui: { label: "Intensity", control: "slider" }
-  },
-  mode: {
-    type: "int",
-    enum: "interpolation",  // References global enum
-    default: "linear"
-  }
-}
-\`\`\`
-
-**Supported types:** \`float\`, \`int\`, \`uint\`, \`bool\`, \`vec2\`, \`vec3\`, \`vec4\`, \`mat3\`, \`mat4\`
-
-**UI controls:** \`slider\`, \`dropdown\`, \`color\`, \`checkbox\`
-
----
-
-## Textures
-
-Define internal render targets:
-
-\`\`\`javascript
-textures: {
-  _blurTemp: {
-    width: "input",
-    height: "input",
-    format: "rgba8unorm"
-  },
-  downsampled: {
-    width: "25%",
-    height: "25%",
-    format: "rgba16float"
-  }
-}
-\`\`\`
-
-**Dimension specs:** absolute numbers, \`"screen"\`, \`"input"\`, percentages (\`"50%"\`)
-
-**Reserved names:** \`inputTex\`, \`outputTex\`, \`inputTex3d\`, \`inputGeo\` — synthesized by runtime
-
----
-
-## Passes
-
-Each pass transforms inputs to outputs:
-
-\`\`\`javascript
-passes: [
-  {
-    name: "blurH",
-    type: "render",        // or "compute"
-    program: "blurH",
-    inputs: { inputTex: "inputTex" },
-    outputs: { fragColor: "_blurTemp" }
-  },
-  {
-    name: "blurV",
-    program: "blurV",
-    inputs: { inputTex: "_blurTemp" },
-    outputs: { fragColor: "outputTex" }
-  }
-]
-\`\`\`
-
-**Pass properties:**
-- **name** — Unique identifier
-- **type** — \`render\` (fragment shader) or \`compute\` (compute shader)
-- **program** — Shader filename (without extension)
-- **inputs** — Maps sampler uniforms to texture names
-- **outputs** — Maps output locations to texture names
-- **iterations** — Number of times to run this pass
-- **pingpong** — Array of two textures to swap each iteration
-
----
-
-## On-Disk Layout
+Once registered, effects are called in DSL programs:
 
 \`\`\`
-my-effect/
-├── definition.js       # Effect configuration
-├── glsl/
-│   └── my-shader.glsl  # WebGL implementation
-├── wgsl/
-│   └── my-shader.wgsl  # WebGPU implementation
-└── help.md             # User documentation
+search user
+
+myEffect(scale: 2.0, color: #ff8800)
+  .blur(radius: 5)
+  .write(o0)
+
+render(o0)
 \`\`\`
 
 ---
 
-## UI Categories
-
-Group controls in the editor UI:
-
-\`\`\`javascript
-globals: {
-  temperature: {
-    type: "float",
-    ui: {
-      label: "Temperature",
-      control: "slider",
-      category: "primary"     // camelCase required
-    }
-  },
-  hueCenter: {
-    type: "float",
-    ui: {
-      label: "Hue Center",
-      category: "hslSecondary",
-      enabledBy: "hslEnable"  // Only enabled when hslEnable is truthy
-    }
-  }
-}
-\`\`\`
-
-**Rules:** Category names MUST be camelCase (no spaces, underscores, or PascalCase)
-
----
-
-## Conditional Controls (enabledBy)
-
-Control when parameters are enabled:
-
-\`\`\`javascript
-// Simple truthy check
-enabledBy: "advancedMode"
-
-// Comparison operators
-enabledBy: { param: "intensity", gt: 0.5 }
-enabledBy: { param: "mode", eq: 1 }
-enabledBy: { param: "mode", in: [1, 2, 3] }
-
-// Logical operators
-enabledBy: {
-  or: [
-    { param: "mode", eq: 1 },
-    { param: "enabled", eq: true }
-  ]
-}
-\`\`\`
-
-**Operators:** \`eq\`, \`neq\`, \`gt\`, \`gte\`, \`lt\`, \`lte\`, \`in\`, \`notIn\`, \`or\`, \`and\`, \`not\`
-
----
-
-## Lifecycle Hooks
-
-For effects needing CPU-side state management:
-
-\`\`\`javascript
-export default new Effect({
-  name: "PulseEffect",
-  namespace: "examples",
-
-  onInit() {
-    this.state.phase = 0;
-  },
-
-  onUpdate({ time, delta, uniforms }) {
-    this.state.phase += delta * uniforms.speed;
-    return {
-      u_pulse: Math.sin(this.state.phase) * uniforms.intensity
-    };
-  },
-
-  onDestroy() {
-    // Cleanup resources
-  }
-});
-\`\`\`
-
----
-
-## 3D Volumes & Geometry
-
-Effects can produce 3D volume or geometry buffer outputs:
-
-\`\`\`javascript
-export default new Effect({
-  name: "VolumeGenerator",
-  namespace: "synth3d",
-  textures: {
-    volumeCache: { width: 64, height: 4096, format: "rgba16float" },
-    geoBuffer: { width: "screen", height: "screen", format: "rgba16float" }
-  },
-  passes: [ /* ... */ ],
-  outputTex3d: "volumeCache",  // Expose as 3D output
-  outputGeo: "geoBuffer"       // Expose as geometry output
-});
-\`\`\`
-
----
-
-## Full Example
-
-\`\`\`javascript
-import { Effect } from '../../../src/runtime/effect.js';
-
-export default new Effect({
-  name: "SimpleBloom",
-  namespace: "filter",
-  func: "bloom",
-  tags: ["color"],
-
-  globals: {
-    intensity: {
-      type: "float",
-      default: 0.5,
-      min: 0,
-      max: 1,
-      ui: { label: "Intensity", control: "slider" }
-    },
-    threshold: {
-      type: "float",
-      default: 0.5,
-      min: 0,
-      max: 1,
-      ui: { label: "Threshold", control: "slider" }
-    }
-  },
-
-  textures: {
-    downsampled: { width: "25%", height: "25%", format: "rgba16float" }
-  },
-
-  passes: [
-    {
-      name: "downsample",
-      program: "downsample",
-      inputs: { scene: "inputTex" },
-      outputs: { color: "downsampled" }
-    },
-    {
-      name: "composite",
-      program: "composite",
-      inputs: { scene: "inputTex", bloom: "downsampled" },
-      outputs: { color: "outputTex" }
-    }
-  ]
-});
-\`\`\`
-
----
-
-*For full documentation, see the [Effect Definition Spec](https://noisemaker.readthedocs.io/en/latest/shaders/effects.html)*
+*For complete documentation, see [portable/](https://github.com/noisefactor/portable)*
 `
     renderDocContent(placeholder)
 }

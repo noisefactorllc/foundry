@@ -1237,6 +1237,32 @@ function setupMenuBar() {
         })
     }
 
+    // New file menu item
+    const newFileMenuItem = document.getElementById('newFileMenuItem')
+    if (newFileMenuItem) {
+        newFileMenuItem.addEventListener('click', async () => {
+            menu.querySelectorAll('.menu-items').forEach(el => el.classList.add('hide'))
+            const filename = await nameDialog.show({
+                title: 'New File',
+                label: 'Filename',
+                value: '',
+                placeholder: 'e.g., glsl/helper.glsl',
+                confirmText: 'Create'
+            })
+            if (filename) {
+                // Create the file with empty content
+                workspaceStore.setFile(filename, '')
+                fileBrowser.render()
+                // Open the new file in editor
+                if (!canvasEditorVisible) {
+                    toggleCanvasEditor()
+                }
+                switchEditorFile(filename)
+                toast.success(`Created: ${filename}`)
+            }
+        })
+    }
+
     // Workspace files menu item
     const workspaceFilesMenuItem = document.getElementById('workspaceFilesMenuItem')
     if (workspaceFilesMenuItem) {
