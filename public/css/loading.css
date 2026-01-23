@@ -48,6 +48,15 @@
     text-align: center;
 }
 
+.loading-logo {
+    width: 64px;
+    height: 64px;
+    margin-bottom: 16px;
+    color: var(--color-text-primary);
+    filter: drop-shadow(0 0 20px rgba(0, 212, 255, 0.4));
+    animation: title-glow 3s ease-in-out infinite alternate;
+}
+
 .loading-title {
     font-family: var(--font-logotype);
     font-size: 36px;
