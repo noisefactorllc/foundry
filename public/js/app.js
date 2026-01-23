@@ -7,7 +7,7 @@
 
 import { ShadeRenderer } from './noisemaker/index.js'
 import { workspaceStore, saveWorkspace, loadWorkspace, registerEffectFromWorkspace } from './workspace/index.js'
-import { FileBrowser, ParamControls, SavedEffects, keyboard, toast, helpModal, aboutModal, nameDialog, CodeEditor, deleteEffectDialog } from './ui/index.js'
+import { FileBrowser, ParamControls, SavedEffects, keyboard, toast, helpModal, aboutModal, nameDialog, CodeEditor, deleteEffectDialog, initDocReader, toggleDocReader, showDocReader, hideDocReader, showPlaceholderContent } from './ui/index.js'
 import { OpenEffectDialog } from './ui/open-effect-dialog.js'
 import { WorkspaceFilesDialog } from './ui/workspace-files-dialog.js'
 import { shareModal } from './ui/share-modal.js'
@@ -760,6 +760,22 @@ document.querySelectorAll('.canvas-overlay .overlay-close-btn').forEach(btn => {
 toggleSavedOverlay?.addEventListener('click', () => showBottomLeftOverlay('saved'))
 toggleDslOverlay?.addEventListener('click', toggleCanvasEditor)
 
+// Doc reader toggle
+const docToggleBtn = document.getElementById('doc-toggle-btn')
+const docReaderClose = document.querySelector('.doc-reader-close')
+
+docToggleBtn?.addEventListener('click', () => {
+    const isVisible = toggleDocReader()
+    docToggleBtn.classList.toggle('active', isVisible)
+    canvasEditor?.classList.toggle('doc-open', isVisible)
+})
+
+docReaderClose?.addEventListener('click', () => {
+    hideDocReader()
+    docToggleBtn?.classList.remove('active')
+    canvasEditor?.classList.remove('doc-open')
+})
+
 // Save effect button in overlay
 saveEffectOverlayBtn?.addEventListener('click', async () => {
     const name = await nameDialog.show({
@@ -801,6 +817,13 @@ async function init() {
         }
         
         initCanvasEditorControls()
+        
+        // Initialize doc reader - show by default
+        initDocReader()
+        showPlaceholderContent()
+        showDocReader()
+        docToggleBtn?.classList.add('active')
+        canvasEditor?.classList.add('doc-open')
         
         updateLoadingStatus('Initializing renderer')
         

@@ -72,6 +72,7 @@
                 <span id="menuFilename">untitled</span>
             </div>
             <div id="menuRight">
+                <button id="doc-toggle-btn" class="menu-icon-btn icon-material" title="Documentation" aria-label="Toggle documentation">info</button>
                 <button id="toggle-dsl-overlay" class="menu-icon-btn icon-material active" title="Show DSL" aria-label="Toggle DSL code">code</button>
                 <button id="play-pause-btn" class="menu-icon-btn icon-material" title="Play/Pause (Space)" aria-label="Play/Pause">pause</button>
             </div>
@@ -127,6 +128,15 @@
                 <div id="compiler-error"></div>
             </div>
         </div>
+    </div>
+
+    <!-- Doc Reader Panel -->
+    <div id="doc-reader-panel">
+        <div class="doc-reader-header">
+            <h2 class="doc-reader-title">Documentation</h2>
+            <button class="doc-reader-close" aria-label="Close documentation">×</button>
+        </div>
+        <div id="doc-reader-content"></div>
     </div>
 
     <script src="js/vendor/marked.min.js"></script>
