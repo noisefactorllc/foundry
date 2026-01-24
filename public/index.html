@@ -19,6 +19,12 @@
     <link rel="stylesheet" href="css/loading.css">
 </head>
 <body>
+    <!-- Rotate Device Overlay (portrait mode) -->
+    <div id="rotate-device-overlay">
+        <div class="rotate-icon"><span class="material-symbols-outlined">screen_rotation</span></div>
+        <p>Please rotate your device to landscape mode</p>
+    </div>
+
     <!-- Loading Screen -->
     <div id="loading-screen">
         <div class="loading-modal">
@@ -27,6 +33,7 @@
                 <h1 class="loading-title"><span>Foundry</span></h1>
                 <p class="loading-tagline">Shader Effects Editor</p>
                 <div class="loading-status">
+                    <div class="loading-spinner"></div>
                     <span>Initializing</span>
                 </div>
             </div>

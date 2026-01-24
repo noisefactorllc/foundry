@@ -735,3 +735,51 @@ body {
         max-height: 35vh;
     }
 }
+
+/* =====================================================================
+   Force Landscape Mode
+   ===================================================================== */
+#rotate-device-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--color-bg, #07090d);
+    z-index: 99999;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text, #d9deeb);
+    font-family: var(--font-body, 'Nunito', sans-serif);
+    text-align: center;
+    padding: 2rem;
+}
+
+#rotate-device-overlay .rotate-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+    animation: rotate-hint 2s ease-in-out infinite;
+}
+
+#rotate-device-overlay p {
+    font-size: 1.25rem;
+    opacity: 0.8;
+}
+
+@keyframes rotate-hint {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(-15deg); }
+    75% { transform: rotate(15deg); }
+}
+
+@media (orientation: portrait) and (max-width: 900px) {
+    #rotate-device-overlay {
+        display: flex;
+    }
+    
+    body > *:not(#rotate-device-overlay) {
+        visibility: hidden;
+    }
+}
