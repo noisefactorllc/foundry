@@ -145,9 +145,11 @@ A portable effect is a folder containing shader files and a JSON definition:
 my-effect/
 ├── definition.json     # Effect metadata & parameters
 ├── glsl/
-│   └── main.glsl       # WebGL shader*
+│   ├── main.glsl       # WebGL shader
+│   └── another.glsl    # Additional render passes...
 ├── wgsl/
-│   └── main.wgsl       # WebGPU shader*
+│   ├── main.wgsl       # WebGPU shader
+│   └── another.wgsl    # Additional render passes...
 └── help.md             # Documentation (optional)
 \`\`\`
 
