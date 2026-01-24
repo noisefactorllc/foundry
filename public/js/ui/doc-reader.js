@@ -133,7 +133,7 @@ export function showPlaceholderContent() {
 
 Foundry is a distraction-free editor for portable GLSL and WGSL shader effects. Effects you create here work across the entire Noise Factor ecosystem, and can be modified to run anywhere shaders are used.
 
-Based on the [Portable Effect Format](https://github.com/noisedeck/portable).
+You can import any effect created with the [Portable Effect Format](https://github.com/noisedeck/portable).
 
 ---
 
@@ -388,12 +388,17 @@ Process an input texture:
 
 | Namespace | Description |
 |-----------|-------------|
-| \`synth\` | 2D generators |
-| \`filter\` | 2D processors |
-| \`mixer\` | Blend two sources |
-| \`sim\` | Temporal simulations |
-| \`synth3d\` | 3D volume generators |
-| \`filter3d\` | 3D volume processors |
+| \`io\` | Pipeline I/O functions (built-in, no search required) |
+| \`classicNoisedeck\` | Complex shaders ported from original noisedeck.app |
+| \`classicNoisemaker\` | Shader implementations of classic noisemaker effects |
+| \`synth\` | Generator effects |
+| \`mixer\` | Blend two sources from A to B |
+| \`filter\` | Apply special effects to 2D input |
+| \`render\` | Rendering utilities and feedback loops |
+| \`points\` | Particle and agent-based simulations |
+| \`synth3d\` | 3D volumetric generators |
+| \`filter3d\` | 3D volumetric processors |
+| \`user\` | User-defined effects |
 
 ---
 
