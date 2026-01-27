@@ -15,3 +15,4 @@ export { NameDialog, nameDialog, ConfirmDialog, confirmDialog } from './name-dia
 export { CodeEditor } from './code-editor.js'
 export { DeleteEffectDialog, deleteEffectDialog } from './delete-effect-dialog.js'
 export { initDocReader, toggleDocReader, showDocReader, hideDocReader, showPlaceholderContent, renderDocContent } from './doc-reader.js'
+export { ImportFromUrlDialog, importFromUrlDialog } from './import-from-url-dialog.js'

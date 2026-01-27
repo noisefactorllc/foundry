@@ -420,6 +420,9 @@ export class ShareModal {
                             </button>
                         </div>
                         <div class="share-effects-count" style="display: none;"></div>
+                        <button id="share-blaster-btn" class="blaster-publish-btn" type="button">
+                            publish on <svg version="1.0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 95" preserveAspectRatio="xMidYMid meet"><g transform="translate(0,95) scale(0.1,-0.1)" fill="currentColor" stroke="none"><path d="M310 490 l0 -200 55 0 55 0 0 115 0 115 30 0 c27 0 30 -3 30 -30 0 -25 4 -30 25 -30 20 0 25 -5 25 -25 0 -21 5 -25 30 -25 l30 0 0 -60 0 -61 58 3 57 3 3 198 2 197 -60 0 -60 0 0 -85 c0 -84 0 -85 -25 -85 -21 0 -25 5 -25 30 0 27 -3 30 -30 30 -25 0 -30 4 -30 24 0 19 -6 25 -27 28 -22 2 -29 9 -31 31 -3 26 -6 27 -58 27 l-54 0 0 -200z"/><path d="M1320 660 l0 -30 60 0 60 0 0 30 0 30 -60 0 -60 0 0 -30z"/><path d="M2422 493 l3 -198 168 -3 167 -2 0 30 c0 27 3 30 30 30 l31 0 -3 58 c-3 54 -4 57 -30 60 -22 3 -28 9 -28 28 0 20 5 24 30 24 30 0 30 1 30 55 0 54 0 55 -30 55 -27 0 -30 3 -30 30 l0 30 -170 0 -170 0 2 -197z m278 82 l0 -55 -80 0 -80 0 0 55 0 55 80 0 80 0 0 -55z m0 -170 l0 -55 -80 0 -80 0 0 55 0 55 80 0 80 0 0 -55z"/><path d="M2902 493 l3 -198 165 0 165 0 3 27 3 27 -113 3 -113 3 -3 168 -2 167 -55 0 -55 0 2 -197z"/><path d="M3380 660 c0 -27 -3 -30 -30 -30 -25 0 -30 -4 -30 -25 0 -20 -5 -25 -25 -25 l-25 0 0 -145 0 -145 55 0 55 0 0 60 0 60 85 0 85 0 0 -60 0 -60 55 0 55 0 0 145 0 145 -25 0 c-20 0 -25 5 -25 25 0 21 -5 25 -30 25 -27 0 -30 3 -30 30 l0 30 -85 0 -85 0 0 -30z m110 -55 c0 -21 5 -25 30 -25 30 0 30 -1 30 -55 l0 -55 -85 0 -85 0 0 55 c0 54 0 55 30 55 25 0 30 4 30 25 0 20 5 25 25 25 20 0 25 -5 25 -25z"/><path d="M3748 663 c-2 -22 -9 -29 -30 -31 -27 -3 -28 -6 -28 -58 0 -53 0 -54 30 -54 27 0 30 -3 30 -30 l0 -30 110 0 110 0 0 -55 0 -56 -82 3 c-82 3 -83 3 -86 31 -3 26 -6 27 -58 27 -53 0 -54 0 -54 -30 0 -27 3 -30 30 -30 27 0 30 -3 30 -30 l0 -31 138 3 137 3 3 27 c3 21 9 27 30 30 25 3 27 7 28 48 1 59 -4 70 -32 70 -19 0 -24 5 -24 25 l0 25 -115 0 -115 0 0 55 0 55 85 0 c84 0 85 0 85 -25 0 -25 2 -26 58 -23 50 3 57 6 60 26 3 19 -1 22 -27 22 -28 0 -31 3 -31 30 l0 30 -139 0 -140 0 -3 -27z"/><path d="M4170 660 c0 -30 1 -30 55 -30 l55 0 2 -167 3 -168 55 0 55 0 3 168 2 167 55 0 c54 0 55 0 55 30 l0 30 -170 0 -170 0 0 -30z"/><path d="M4532 493 l3 -198 198 -3 197 -2 0 30 0 30 -140 0 -140 0 0 55 0 55 110 0 110 0 0 30 0 30 -110 0 -110 0 0 55 0 55 140 0 140 0 0 30 0 30 -200 0 -200 0 2 -197z"/><path d="M4960 490 l0 -200 55 0 55 0 0 61 c0 60 0 60 28 57 21 -2 28 -9 30 -30 3 -22 9 -28 27 -28 18 0 24 -6 27 -27 3 -28 4 -28 86 -31 l82 -3 0 31 c0 25 -4 30 -25 30 -21 0 -25 5 -25 30 0 27 -3 30 -30 30 -25 0 -30 4 -30 25 0 24 3 25 55 25 l55 0 0 85 c0 84 0 85 -25 85 -21 0 -25 5 -25 30 l0 30 -170 0 -170 0 0 -200z m280 85 c0 -54 0 -55 -30 -55 -25 0 -30 -4 -30 -25 0 -24 -3 -25 -55 -25 l-55 0 0 80 0 80 85 0 85 0 0 -55z"/><path d="M5490 550 l0 -140 60 0 60 0 0 55 c0 52 1 55 25 55 25 0 25 1 25 85 l0 85 -85 0 -85 0 0 -140z"/><path d="M790 550 c0 -27 -3 -30 -30 -30 l-30 0 0 -85 0 -85 30 0 c27 0 30 -3 30 -30 l0 -30 140 0 140 0 0 30 c0 27 3 30 30 30 l30 0 0 85 0 85 -30 0 c-27 0 -30 3 -30 30 l0 30 -140 0 -140 0 0 -30z m220 -115 l0 -85 -80 0 -80 0 0 85 0 85 80 0 80 0 0 -85z"/><path d="M1270 550 c0 -25 4 -30 25 -30 25 0 25 -1 25 -85 l0 -85 -55 0 c-54 0 -55 0 -55 -30 l0 -30 170 0 170 0 0 30 c0 30 -1 30 -55 30 l-55 0 0 115 0 115 -85 0 -85 0 0 -30z"/><path d="M1630 550 c0 -25 -4 -30 -25 -30 -21 0 -25 -5 -25 -30 0 -25 4 -30 25 -30 20 0 25 -5 25 -25 l0 -25 115 0 115 0 0 -30 0 -30 -140 0 -140 0 0 -30 0 -30 168 2 167 3 3 28 c3 21 9 27 28 27 20 0 24 5 24 30 0 25 -4 30 -24 30 -19 0 -25 6 -28 28 l-3 27 -112 3 c-113 3 -113 3 -113 27 l0 25 115 0 115 0 0 30 0 30 -145 0 -145 0 0 -30z"/><path d="M2059 573 c-1 -5 -2 -17 -3 -28 -1 -14 -9 -21 -28 -23 l-28 -3 0 -84 0 -84 28 -3 c21 -2 27 -8 27 -28 l0 -25 143 -3 142 -3 0 30 0 30 -112 3 -113 3 0 25 0 25 143 3 142 3 0 54 c0 54 0 55 -30 55 -27 0 -30 3 -30 30 l0 30 -140 0 c-77 0 -140 -3 -141 -7z m221 -78 c0 -25 -1 -25 -85 -25 -84 0 -85 0 -85 25 0 25 1 25 85 25 84 0 85 0 85 -25z"/><path d="M5492 323 c3 -27 5 -28 58 -28 53 0 55 1 58 28 3 27 3 27 -58 27 -61 0 -61 0 -58 -27z"/></g></svg>
+                        </button>
                         <div class="share-expires"></div>
                         <div class="share-actions">
                             <button id="share-done-btn" class="action-btn">Done</button>
@@ -444,6 +447,9 @@ export class ShareModal {
         const doneBtn = this.modal.querySelector('#share-done-btn')
         doneBtn.addEventListener('click', () => this.close())
 
+        const blasterBtn = this.modal.querySelector('#share-blaster-btn')
+        blasterBtn.addEventListener('click', () => this._publishToBlaster())
+
         // Enter key to submit
         const titleInput = this.modal.querySelector('#share-title')
         titleInput.addEventListener('keydown', (e) => {
@@ -462,6 +468,26 @@ export class ShareModal {
         const div = document.createElement('div')
         div.textContent = str
         return div.innerHTML
+    }
+
+    /**
+     * Publish to NoiseBLASTER!
+     * @private
+     */
+    _publishToBlaster() {
+        const urlInput = this.modal.querySelector('#share-url')
+        if (!urlInput || !urlInput.value) return
+
+        // Extract code from URL (e.g., https://sharing.noisedeck.app/s/ABC123)
+        const match = urlInput.value.match(/\/s\/([a-zA-Z0-9_-]+)$/)
+        if (!match) {
+            console.error('Could not extract share code from URL:', urlInput.value)
+            return
+        }
+
+        const code = match[1]
+        const intakeUrl = `https://blaster.noisedeck.app/intake?code=${encodeURIComponent(code)}&app=foundry`
+        window.open(intakeUrl, '_blank')
     }
 }
 

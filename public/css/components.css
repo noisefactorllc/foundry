@@ -658,6 +658,35 @@
     margin-bottom: 8px;
 }
 
+.blaster-publish-btn {
+    display: flex;
+    width: 100%;
+    margin-bottom: 0.5rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.5);
+    color: #e3e3e3;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.blaster-publish-btn:hover {
+    background: rgba(0, 0, 0, 0.75);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+
+.blaster-publish-btn svg {
+    height: 1.75em;
+    width: auto;
+    fill: currentColor;
+    transform: translateY(-1px) translateX(-8px);
+}
+
 .share-expires {
     font-size: 11px;
     color: var(--color-text-muted);
