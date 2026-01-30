@@ -15,6 +15,7 @@ export class AboutModal {
         this.isOpen = false
         this.metadata = null
         this.metadataFetched = false
+        this.noisemakerVersion = null
     }
 
     /**
@@ -108,6 +109,35 @@ export class AboutModal {
 
         this.metadataFetched = true
         this._updateBuildInfo()
+
+        // Fetch noisemaker version from vendor bundle
+        await this._fetchNoisemakerVersion()
+    }
+
+    /**
+     * Fetch noisemaker version from vendor bundle header
+     * @private
+     */
+    async _fetchNoisemakerVersion() {
+        try {
+            const response = await fetch('./js/noisemaker/vendor/noisemaker-shaders-core.esm.js', { cache: 'no-store' })
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`)
+            }
+            // Read only the first 500 bytes to get the header
+            const reader = response.body.getReader()
+            const { value } = await reader.read()
+            reader.cancel()
+            const headerText = new TextDecoder().decode(value).slice(0, 500)
+            // Parse Build: line from header comment
+            const match = headerText.match(/^\s*\*\s*Build:\s*(\S+)/m)
+            if (match) {
+                this.noisemakerVersion = match[1]
+                this._updateBuildInfo()
+            }
+        } catch (error) {
+            console.warn('[AboutModal] Failed to fetch noisemaker version:', error)
+        }
     }
 
     /**
@@ -156,6 +186,12 @@ export class AboutModal {
         if (buildInfoEl && this.metadata) {
             buildInfoEl.textContent = `build: ${this.metadata.gitHash} / deployed: ${this.metadata.deployed}`
         }
+        const nmVersionEl = this.modal.querySelector('.about-modal-build.noisemaker-version')
+        if (nmVersionEl) {
+            nmVersionEl.textContent = this.noisemakerVersion
+                ? `noisemaker version: ${this.noisemakerVersion}`
+                : ''
+        }
     }
 
     /**
@@ -183,6 +219,7 @@ export class AboutModal {
                         <div class="about-modal-title" id="about-modal-title">Foundry</div>
                         <div class="about-modal-copyright">&copy; 2026 <a href="https://noisefactor.io/" class="about-modal-link" target="_blank" rel="noopener">Noise Factor LLC.</a></div>
                         <div class="about-modal-build">${defaultBuildInfo}</div>
+                        <div class="about-modal-build noisemaker-version">${this.noisemakerVersion ? `noisemaker version: ${this.noisemakerVersion}` : ''}</div>
                     </div>
                 </div>
             </div>
