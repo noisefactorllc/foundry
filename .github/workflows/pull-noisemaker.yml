@@ -23,6 +23,12 @@ jobs:
         env:
           NOISEMAKER_SHA: ${{ github.event.client_payload.sha }}
 
+      - name: Generate deployment metadata
+        run: |
+          GIT_HASH=$(git rev-parse HEAD)
+          DEPLOY_DATE=$(date -u +"%s")
+          printf '{\n  "git_hash": "%s",\n  "date": %s\n}\n' "$GIT_HASH" "$DEPLOY_DATE" > "$GITHUB_WORKSPACE/public/deployment-meta.json"
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
