@@ -28,7 +28,7 @@ function cspMiddleware(req, res, next) {
         "style-src 'self' 'unsafe-inline'",
         "img-src 'self' data: blob:",
         "font-src 'self' data: https://fonts.noisedeck.app",
-        "connect-src 'self' http://localhost:* https://sharing.noisedeck.app",
+        "connect-src 'self' http://localhost:* https://fonts.noisedeck.app https://sharing.noisedeck.app",
         "worker-src 'self' blob:"
     ];
 

@@ -638,7 +638,10 @@ export class ShadeRenderer {
         const textRgb = this._hexToRgb(params.color)
         const rotation = (params.rotation || 0) * Math.PI / 180
         
-        ctx.font = `${fontSize}px ${params.font}`
+        const fontFamily = /^(sans-serif|serif|monospace|cursive|fantasy|system-ui)$/i.test(params.font)
+            ? params.font
+            : `"${params.font}"`
+        ctx.font = `${fontSize}px ${fontFamily}`
         ctx.textAlign = params.justify || 'center'
         ctx.textBaseline = 'middle'
         ctx.fillStyle = `rgba(${Math.round(textRgb[0] * 255)}, ${Math.round(textRgb[1] * 255)}, ${Math.round(textRgb[2] * 255)}, 1)`
