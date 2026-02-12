@@ -297,7 +297,11 @@ export class ShadeRenderer {
 
             // Compile the DSL with shader overrides
             await this._renderer.compile(dsl, { shaderOverrides })
-            
+
+            // Normalize color uniforms: DSL defaults may be hex strings
+            // which the WebGL uniform setter can't parse as vec3
+            this._normalizeColorUniforms()
+
             // SUCCESS: Update state
             this._currentDsl = dsl
             this._lastGoodDsl = dsl // Track last known good DSL
@@ -579,9 +583,29 @@ export class ShadeRenderer {
     _hexToRgb(hex) {
         if (Array.isArray(hex)) return hex.slice(0, 3)
         const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
-        return result 
+        return result
             ? [parseInt(result[1], 16) / 255, parseInt(result[2], 16) / 255, parseInt(result[3], 16) / 255]
             : [1, 1, 1]
+    }
+
+    /**
+     * Normalize color uniforms after compilation.
+     * The DSL parser stores color defaults as hex strings (e.g. "#000000"),
+     * but the WebGL uniform setter expects arrays. Convert in-place.
+     * @private
+     */
+    _normalizeColorUniforms() {
+        const passes = this._renderer.pipeline?.graph?.passes
+        if (!passes) return
+
+        for (const pass of passes) {
+            if (!pass.uniforms) continue
+            for (const [name, value] of Object.entries(pass.uniforms)) {
+                if (typeof value === 'string' && /^#[a-f0-9]{6}$/i.test(value)) {
+                    pass.uniforms[name] = this._hexToRgb(value)
+                }
+            }
+        }
     }
 
     /**

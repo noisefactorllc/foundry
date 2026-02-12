@@ -6,6 +6,7 @@
  */
 
 import { ShadeRenderer } from './noisemaker/index.js'
+import { preloadFontsForDsl } from './fontLoader.js'
 import { workspaceStore, saveWorkspace, loadWorkspace, registerEffectFromWorkspace } from './workspace/index.js'
 import { FileBrowser, ParamControls, SavedEffects, keyboard, toast, helpModal, aboutModal, nameDialog, CodeEditor, deleteEffectDialog, initDocReader, toggleDocReader, showDocReader, hideDocReader, showPlaceholderContent, importFromUrlDialog } from './ui/index.js'
 import { OpenEffectDialog } from './ui/open-effect-dialog.js'
@@ -730,7 +731,8 @@ async function recompileFromEditor() {
         if (!dsl.trim()) {
             return { success: true }
         }
-        
+
+        await preloadFontsForDsl(dsl)
         const result = await renderer.compile(dsl, { workspaceStore })
         
         if (currentFile === 'definition.json' && result.success) {
@@ -1504,7 +1506,8 @@ async function compileAndRun() {
 
     showCompileStatus('Compiling shader...', '')
     setAgentStatus('Compiling...')
-    
+
+    await preloadFontsForDsl(dsl)
     const result = await renderer.compile(dsl, { workspaceStore })
 
     if (result.success) {
