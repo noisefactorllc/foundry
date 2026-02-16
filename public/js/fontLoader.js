@@ -1,13 +1,13 @@
 /**
  * Font Loader for Foundry
  *
- * Dynamically loads fonts from fonts.noisedeck.app for text effects.
+ * Dynamically loads fonts from fonts.noisefactor.io for text effects.
  * Uses FontFace API for fast loading without full bundle download.
  *
  * @module fontLoader
  */
 
-const FONTS_BASE_URL = 'https://fonts.noisedeck.app'
+const FONTS_BASE_URL = 'https://fonts.noisefactor.io'
 
 class FontLoader {
     constructor() {
