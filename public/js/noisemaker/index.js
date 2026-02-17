@@ -1,8 +1,8 @@
 /**
  * Noisemaker integration for Shade
  *
- * Re-exports the ShadeRenderer and useful utilities from the vendored
- * noisemaker bundle.
+ * Re-exports the ShadeRenderer and useful utilities from the
+ * noisemaker bundle (loaded from CDN).
  *
  * @module noisemaker
  */

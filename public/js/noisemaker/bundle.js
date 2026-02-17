@@ -14,6 +14,8 @@
 // VERSION MARKER - helps identify if updated code is running
 const BUNDLE_VERSION = '2.1.0'
 
+const SHADER_CDN = 'https://shaders.noisedeck.app/0.8.0'
+
 // Detect if we're in local development
 const isLocalDev = typeof window !== 'undefined' && (
     window.location.hostname === 'localhost' ||
@@ -23,8 +25,8 @@ const isLocalDev = typeof window !== 'undefined' && (
 
 // Choose bundle based on environment
 const bundlePath = isLocalDev
-    ? './vendor/noisemaker-shaders-core.esm.js'
-    : './vendor/noisemaker-shaders-core.esm.min.js'
+    ? `${SHADER_CDN}/noisemaker-shaders-core.esm.js`
+    : `${SHADER_CDN}/noisemaker-shaders-core.esm.min.js`
 
 // Dynamic import and re-export
 const bundle = await import(bundlePath)

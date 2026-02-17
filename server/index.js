@@ -24,11 +24,11 @@ const HOST = process.env.HOST || '127.0.0.1';
 function cspMiddleware(req, res, next) {
     const csp = [
         "default-src 'self'",
-        "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdnjs.cloudflare.com",
+        "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdnjs.cloudflare.com https://shaders.noisedeck.app",
         "style-src 'self' 'unsafe-inline'",
         "img-src 'self' data: blob:",
         "font-src 'self' data: https://fonts.noisefactor.io",
-        "connect-src 'self' http://localhost:* https://fonts.noisefactor.io https://sharing.noisedeck.app",
+        "connect-src 'self' http://localhost:* https://fonts.noisefactor.io https://shaders.noisedeck.app https://sharing.noisedeck.app",
         "worker-src 'self' blob:"
     ];
 
