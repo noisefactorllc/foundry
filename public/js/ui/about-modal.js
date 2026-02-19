@@ -220,7 +220,7 @@ export class AboutModal {
                         <div class="about-modal-copyright">&copy; 2026 <a href="https://noisefactor.io/" class="about-modal-link" target="_blank" rel="noopener">Noise Factor LLC.</a></div>
                         <div class="about-modal-build">${defaultBuildInfo}</div>
                         <div class="about-modal-build noisemaker-version">${this.noisemakerVersion ? `noisemaker version: ${this.noisemakerVersion}` : ''}</div>
-                        <div class="about-modal-ecosystem">Foundry is a free tool by <a href="https://noisefactor.io/" target="_blank" rel="noopener">Noise Factor</a>, powered by the <a href="https://noisemaker.app/" target="_blank" rel="noopener">Noisemaker</a> open source engine. <a href="https://noisedeck.app/" target="_blank" rel="noopener">Noisedeck</a> is our video synth — free to use, with a $4/mo subscription for pro features.</div>
+                        <div class="about-modal-ecosystem">Foundry is a free tool by <a href="https://noisefactor.io/" target="_blank" rel="noopener">Noise Factor</a>, powered by the <a href="https://noisemaker.app/" target="_blank" rel="noopener">Noisemaker</a> open source engine. <a href="https://noisedeck.app/" target="_blank" rel="noopener">Noisedeck</a> is our video synth. Free to use, with a $4/mo subscription for pro features.</div>
                     </div>
                 </div>
             </div>
