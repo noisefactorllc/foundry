@@ -7,22 +7,25 @@
 @font-face {
     font-family: 'Nunito Block';
     src: url('https://fonts.noisefactor.io/fonts/nunito/Nunito-Block.woff2') format('woff2');
-    font-weight: 400;
+    font-weight: 100 900;
     font-style: normal;
+    font-display: swap;
 }
 
 @font-face {
     font-family: 'Noto Sans Mono Block';
     src: url('https://fonts.noisefactor.io/fonts/noto-sans-mono/NotoSansMono-Block.woff2') format('woff2');
-    font-weight: 400;
+    font-weight: 100 900;
     font-style: normal;
+    font-display: swap;
 }
 
 @font-face {
     font-family: 'Victor Mono Block';
     src: url('https://fonts.noisefactor.io/fonts/victor-mono/VictorMono-Block.woff2') format('woff2');
-    font-weight: 400;
+    font-weight: 100 700;
     font-style: normal;
+    font-display: swap;
 }
 
 /* Noto Sans Mono - Code editor font */
