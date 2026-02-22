@@ -94,7 +94,7 @@ export function renderDocContent(markdown) {
             
             const buildInfo = document.createElement('div')
             buildInfo.className = 'doc-build-info'
-            buildInfo.style.cssText = 'font-family: ui-monospace, \'Cascadia Mono\', \'Consolas\', monospace; font-size: 9px; color: #444; border-top: 1px solid rgba(255, 255, 255, 0.05); padding-top: 1em; margin-top: 1em;'
+            buildInfo.style.cssText = 'font-family: \'Noto Sans Mono\', \'Noto Sans Mono Block\'; font-size: 9px; color: #444; border-top: 1px solid rgba(255, 255, 255, 0.05); padding-top: 1em; margin-top: 1em;'
             buildInfo.textContent = `build: ${hash} / deployed: ${dateStr}`
             docReaderContent.appendChild(buildInfo)
         }

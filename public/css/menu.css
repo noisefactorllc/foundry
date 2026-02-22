@@ -38,7 +38,7 @@
     height: var(--ui-titlebar-height);
     align-items: stretch;
     border-radius: 0 0 var(--ui-corner-radius) 0;
-    font-family: Nunito, sans-serif;
+    font-family: Nunito, 'Nunito Block';
     font-size: 16px;
 }
 
@@ -154,7 +154,7 @@
 /* Dropdown menu */
 .menu {
     position: relative;
-    font-family: Nunito, sans-serif;
+    font-family: Nunito, 'Nunito Block';
     font-size: 0.875em;
     color: var(--accent3);
     margin: 0;
@@ -240,7 +240,7 @@
 .menu-item-with-shortcut .shortcut {
     font-size: 0.75rem;
     opacity: 0.6;
-    font-family: system-ui, -apple-system, sans-serif;
+    font-family: Nunito, 'Nunito Block';
 }
 
 .menu-items div.disabled {

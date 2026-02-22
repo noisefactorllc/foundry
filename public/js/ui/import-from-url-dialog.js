@@ -104,7 +104,7 @@ if (!document.getElementById(STYLES_ID)) {
             width: 100%;
             padding: 0.625rem 0.75rem;
             font-size: 0.8125rem;
-            font-family: 'JetBrains Mono', 'SF Mono', Monaco, Consolas, monospace;
+            font-family: 'Noto Sans Mono', 'Noto Sans Mono Block';
             background: rgba(0, 0, 0, 0.3);
             border: 1px solid rgba(255, 255, 255, 0.15);
             border-radius: 4px;

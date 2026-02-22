@@ -297,7 +297,7 @@ body {
     right: 0.75rem;
     overflow: hidden;
     z-index: 30;
-    font-family: ui-monospace, 'Cascadia Mono', 'Consolas', monospace;
+    font-family: 'Noto Sans Mono', 'Noto Sans Mono Block';
     font-size: 0.875rem;
     line-height: 1.6;
     /* The code-editor component handles pointer-events internally */
@@ -318,7 +318,7 @@ body {
     padding: 0;
     background: transparent;
     color: #ff6b6b;
-    font-family: ui-monospace, 'Cascadia Mono', 'Consolas', monospace;
+    font-family: 'Noto Sans Mono', 'Noto Sans Mono Block';
     font-size: 11px;
     line-height: 1.4;
     z-index: 250;
@@ -622,7 +622,7 @@ body {
 }
 
 #doc-reader-content code {
-    font-family: ui-monospace, 'Cascadia Mono', 'Consolas', monospace;
+    font-family: 'Noto Sans Mono', 'Noto Sans Mono Block';
     font-size: 0.85em;
     background: rgba(255, 255, 255, 0.1);
     padding: 0.1em 0.3em;
@@ -710,7 +710,7 @@ body {
 
 #doc-reader-content td:first-child {
     color: #667eea;
-    font-family: ui-monospace, 'Cascadia Mono', 'Consolas', monospace;
+    font-family: 'Noto Sans Mono', 'Noto Sans Mono Block';
 }
 
 /* Responsive adjustments */
@@ -752,7 +752,7 @@ body {
     align-items: center;
     justify-content: center;
     color: var(--color-text, #d9deeb);
-    font-family: var(--font-body, 'Nunito', sans-serif);
+    font-family: var(--font-body, 'Nunito', 'Nunito Block');
     text-align: center;
     padding: 2rem;
 }
