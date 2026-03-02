@@ -1,6 +1,6 @@
 {
   "name": "effect-workspace",
-  "version": "0.8.5-SNAPSHOT",
+  "version": "0.9.0-SNAPSHOT",
   "description": "Hot-reload effects editor",
   "type": "module",
   "main": "server/index.js",

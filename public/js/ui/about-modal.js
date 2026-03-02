@@ -6,7 +6,7 @@
  * @module ui/about-modal
  */
 
-const APP_VERSION = '0.8.5-SNAPSHOT'
+const APP_VERSION = '0.9.0-SNAPSHOT'
 
 /**
  * AboutModal class
@@ -122,7 +122,7 @@ export class AboutModal {
      */
     async _fetchNoisemakerVersion() {
         try {
-            const response = await fetch('https://shaders.noisedeck.app/0.8.5/noisemaker-shaders-core.esm.js', { cache: 'no-store' })
+            const response = await fetch('https://shaders.noisedeck.app/0.9.0/noisemaker-shaders-core.esm.js', { cache: 'no-store' })
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`)
             }

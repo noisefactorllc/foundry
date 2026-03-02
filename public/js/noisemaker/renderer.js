@@ -56,10 +56,10 @@ export class ShadeRenderer {
             canvasContainer: canvas?.parentElement || null,
             width: this.width,
             height: this.height,
-            basePath: 'https://shaders.noisedeck.app/0.8.5',
+            basePath: 'https://shaders.noisedeck.app/0.9.0',
             preferWebGPU: this.preferWebGPU,
             useBundles: true,
-            bundlePath: 'https://shaders.noisedeck.app/0.8.5/effects',
+            bundlePath: 'https://shaders.noisedeck.app/0.9.0/effects',
             onFPS: options.onFPS,
             onError: options.onError
         })
