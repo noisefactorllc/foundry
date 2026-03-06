@@ -1638,7 +1638,7 @@ async function handleExport() {
 
 // Edit in other apps
 const SHARE_API_URL = 'https://sharing.noisedeck.app/api/embed/shorten'
-const NOISEDECK_URL = 'https://preview.noisedeck.app'
+const NOISEDECK_URL = 'https://noisedeck.app'
 const SHADE_URL = 'https://shade.noisedeck.app'
 const POLYMORPHIC_URL = 'https://polymorphic.noisedeck.app'
 
