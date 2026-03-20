@@ -77,7 +77,7 @@ render(o0)
 ```
 search synth, filter
 
-noise(xScale: 50, yScale: 50, speed: 25)
+noise(scaleX: 50, scaleY: 50, speed: 25)
   .chromaticAberration(aberration: 10)
   .vignette()
   .write(o0)
