@@ -30,7 +30,6 @@ const bundlePath = isLocalDev
 
 // Dynamic import and re-export
 const bundle = await import(bundlePath)
-console.log(`[bundle.js] Noisemaker bundle v${BUNDLE_VERSION} loaded from ${bundlePath}`)
 
 // Re-export everything we need
 export const CanvasRenderer = bundle.CanvasRenderer

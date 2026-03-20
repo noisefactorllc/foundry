@@ -820,7 +820,6 @@ export class ShadeRenderer {
             this._renderer._loadedEffects.set(`${namespace}.${name}`, effect)
         }
 
-        console.log(`[ShadeRenderer] Registered custom effect: ${effectId}`)
     }
 
     /**

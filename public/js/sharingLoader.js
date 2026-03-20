@@ -108,7 +108,6 @@ export function registerPortableEffect(effectData) {
         mergeIntoEnums(choicesToRegister)
     }
 
-    console.log(`[sharingLoader] Registered portable effect: ${effectFunc}`)
 
     return effect
 }

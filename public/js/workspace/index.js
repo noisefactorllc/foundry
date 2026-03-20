@@ -26,12 +26,10 @@ import { workspaceStore } from './workspace-store.js'
 export function registerEffectFromWorkspace(renderer = null, dslOverride = null) {
     const defJson = workspaceStore.getFile('definition.json')
     if (!defJson) {
-        console.log('[Workspace] No definition.json found, skipping registration')
         return false
     }
 
     try {
-        console.log('[Workspace] Parsing definition.json (%d chars):', defJson.length)
         const def = JSON.parse(defJson)
         const name = def.func || def.name
         if (!name) {
@@ -39,7 +37,6 @@ export function registerEffectFromWorkspace(renderer = null, dslOverride = null)
             return false
         }
         
-        console.log('[Workspace] Registering effect:', name)
         
         const globals = def.globals || {}
 
@@ -57,7 +54,6 @@ export function registerEffectFromWorkspace(renderer = null, dslOverride = null)
                         const newSearch = `search user, ${namespaces.join(', ')}`
                         dsl = dsl.replace(/^search\s+.+$/m, newSearch)
                         workspaceStore.setFile('dsl.txt', dsl)
-                        console.log('[Workspace] Added user to dsl.txt search directive')
                     }
                 }
             }
@@ -65,7 +61,6 @@ export function registerEffectFromWorkspace(renderer = null, dslOverride = null)
             if (def.namespace !== 'user') {
                 def.namespace = 'user'
                 workspaceStore.setFile('definition.json', JSON.stringify(def, null, 2))
-                console.log('[Workspace] Migrated definition.json to use user namespace')
             }
         }
 
@@ -107,7 +102,6 @@ export function registerEffectFromWorkspace(renderer = null, dslOverride = null)
             name: name,
             args: args
         }
-        console.log('[Workspace] Registering op:', opName, 'with args:', args.map(a => a.name))
         
         // Register the op
         registerOp(opName, opSpec)
@@ -123,7 +117,6 @@ export function registerEffectFromWorkspace(renderer = null, dslOverride = null)
             // Pattern: effectname() at start of line, possibly with namespace prefix
             const effectPattern = new RegExp(`^\\s*(${name}|${namespace}\\.${name}|${namespace}/${name})\\s*\\(`, 'm')
             if (effectPattern.test(dsl)) {
-                console.log('[Workspace] DSL uses effect as starter, overriding stored starter value')
                 isStarter = true
             }
         }
@@ -131,7 +124,6 @@ export function registerEffectFromWorkspace(renderer = null, dslOverride = null)
         if (isStarter) {
             registerStarterOps([opName])
         }
-        console.log('[Workspace] Op registration complete, starter:', isStarter)
 
         // Determine passes - use stored passes from definition if available,
         // otherwise create correct pass structure based on effect type
@@ -139,7 +131,6 @@ export function registerEffectFromWorkspace(renderer = null, dslOverride = null)
         if (def.passes && Array.isArray(def.passes) && def.passes.length > 0) {
             // Use the stored passes structure
             passes = def.passes
-            console.log('[Workspace] Using stored passes:', passes.map(p => p.program).join(', '))
         } else {
             // Create correct pass structure based on starter flag
             const firstProgram = Object.keys(shaders)[0]
@@ -166,7 +157,6 @@ export function registerEffectFromWorkspace(renderer = null, dslOverride = null)
                     }
                 ]
             }
-            console.log('[Workspace] Created', isStarter ? 'starter' : 'filter', 'pass for program:', firstProgram)
         }
 
         // Create effect definition using 'user' namespace
@@ -199,7 +189,6 @@ export function registerEffectFromWorkspace(renderer = null, dslOverride = null)
             renderer.registerCustomEffect(`${namespace}/${name}`, effectDef)
         }
 
-        console.log(`[Workspace] Re-registered effect: ${namespace}/${name}`)
         return true
     } catch (err) {
         console.error('[Workspace] Failed to re-register effect:', err)

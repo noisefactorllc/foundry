@@ -133,7 +133,6 @@ class FontLoader {
                 this._loadedFonts.add(font.name)
             }
 
-            console.log(`Loaded font: ${font.name}`)
             return true
         } catch (err) {
             console.error(`Failed to load font ${fontName}:`, err)
@@ -163,7 +162,6 @@ class FontLoader {
 
         if (fontNames.length === 0) return
 
-        console.log(`Preloading fonts for DSL: ${fontNames.join(', ')}`)
 
         await Promise.all(fontNames.map(name => this.loadFont(name)))
         await document.fonts.ready
