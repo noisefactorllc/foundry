@@ -701,6 +701,7 @@ class CodeEditor extends HTMLElement {
         // Create textarea
         this._textarea = document.createElement('textarea')
         this._textarea.className = 'code-editor-textarea'
+        this._textarea.name = 'code-editor'
         this._textarea.spellcheck = this.getAttribute('spellcheck') === 'true'
         this._textarea.placeholder = this.getAttribute('placeholder') || ''
         this._textarea.readOnly = this.hasAttribute('readonly')
