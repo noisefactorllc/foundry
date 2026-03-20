@@ -259,6 +259,7 @@ export class WorkspaceFilesDialog {
         this.searchInput = document.createElement('input')
         this.searchInput.type = 'text'
         this.searchInput.className = 'workspace-files-search'
+        this.searchInput.name = 'workspace-file-search'
         this.searchInput.placeholder = 'Search workspace files...'
         this.searchInput.setAttribute('autocomplete', 'off')
         this.searchInput.setAttribute('spellcheck', 'false')

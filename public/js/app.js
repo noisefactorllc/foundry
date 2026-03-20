@@ -1226,7 +1226,7 @@ function registerKeyboardShortcuts() {
         {
             key: 'e',
             meta: true,
-            description: 'Export ZIP',
+            description: 'Export effect to ZIP',
             action: handleExport
         },
         {
