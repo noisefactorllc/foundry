@@ -272,28 +272,21 @@ export class ShadeRenderer {
             }
             
             // Extract effect names and load them if needed
-            console.log('[ShadeRenderer] compile: DSL:', dsl)
             const effectData = extractEffectNamesFromDsl(dsl, augmentedManifest)
-            console.log('[ShadeRenderer] compile: extractEffectNamesFromDsl returned:', effectData)
             const effectIds = effectData.map(e => e.effectId)
-            console.log('[ShadeRenderer] compile: effectIds to load:', effectIds)
             
             // Filter out registered effects - they don't need to be loaded from bundles
             const effectIdsToLoad = effectIds.filter(id => {
                 const dotKey = id.replace('/', '.')
                 return !registeredEffects.has(id) && !registeredEffects.has(dotKey)
             })
-            console.log('[ShadeRenderer] compile: effectIds to load (filtered):', effectIdsToLoad)
             
             if (effectIdsToLoad.length > 0) {
                 await this._renderer.loadEffects(effectIdsToLoad)
             }
-            console.log('[ShadeRenderer] compile: loadedEffects after load:', 
-                        Array.from(this._renderer._loadedEffects?.keys() || []))
 
             // Build shader overrides from workspace if provided
             const shaderOverrides = this._buildShaderOverrides(dsl, options.workspaceStore)
-            console.log('[ShadeRenderer] compile: shaderOverrides:', shaderOverrides)
 
             // Compile the DSL with shader overrides
             await this._renderer.compile(dsl, { shaderOverrides })
@@ -306,12 +299,10 @@ export class ShadeRenderer {
             this._currentDsl = dsl
             this._lastGoodDsl = dsl // Track last known good DSL
             this._hasCorruptedState = false
-            console.log('[ShadeRenderer] compile: _renderer.compile succeeded, currentDsl set')
 
             // Sync our ProgramState from the compiled DSL
             // This parses the DSL and initializes step states
             this._programState.fromDsl(dsl)
-            console.log('[ShadeRenderer] compile: ProgramState synced from DSL')
 
             // Initialize text textures for any text effects in the pipeline
             await this._initializeTextEffects(dsl, effectData)
@@ -396,8 +387,6 @@ export class ShadeRenderer {
         // Extract effects with their step indices from DSL
         const effects = extractEffectsFromDsl(dsl)
         
-        console.log('[ShadeRenderer] Extracted effects:', effects)
-        
         // Find text effects (filter/text or text in any namespace)
         for (const effect of effects) {
             if (effect.name === 'text' || effect.effectKey === 'text') {
@@ -405,7 +394,6 @@ export class ShadeRenderer {
                 const stepIndex = effect.temp !== undefined ? effect.temp : effect.stepIndex
                 const args = effect.args || {}
                 
-                console.log('[ShadeRenderer] Found text effect at step', stepIndex, 'temp:', effect.temp, 'args:', args)
                 
                 // Get parameters from the effect args
                 const params = {
@@ -421,7 +409,6 @@ export class ShadeRenderer {
                     justify: args.justify || 'center'
                 }
                 
-                console.log('[ShadeRenderer] Text params:', params)
                 
                 // Create canvas for this text effect
                 const canvas = document.createElement('canvas')
@@ -431,7 +418,6 @@ export class ShadeRenderer {
                 const textureId = `textTex_step_${stepIndex}`
                 this._textCanvases.set(stepIndex, { canvas, textureId, params })
                 
-                console.log('[ShadeRenderer] Created text canvas with textureId:', textureId)
                 
                 // Render text to canvas
                 this._renderTextToCanvas(stepIndex)
@@ -492,20 +478,17 @@ export class ShadeRenderer {
         const overrides = {}
         
         if (!workspaceStore) {
-            console.log('[ShadeRenderer] _buildShaderOverrides: No workspaceStore')
             return overrides
         }
 
         // Get definition.json to find the effect being edited
         const defJson = workspaceStore.getFile('definition.json')
         if (!defJson) {
-            console.log('[ShadeRenderer] _buildShaderOverrides: No definition.json')
             return overrides
         }
 
         let definition
         try {
-            console.log('[ShadeRenderer] Parsing definition.json (%d chars)', defJson.length)
             definition = JSON.parse(defJson)
         } catch (e) {
             console.error('[ShadeRenderer] Failed to parse definition.json:', e.message)
@@ -515,10 +498,8 @@ export class ShadeRenderer {
 
         const effectFunc = definition.func || definition.name
         const effectNs = definition.namespace
-        console.log('[ShadeRenderer] _buildShaderOverrides: Looking for effect:', effectFunc, 'namespace:', effectNs)
         
         if (!effectFunc) {
-            console.log('[ShadeRenderer] _buildShaderOverrides: No effectFunc')
             return overrides
         }
 
@@ -546,7 +527,6 @@ export class ShadeRenderer {
 
         // Extract effects from DSL to find the step indices
         const effects = extractEffectsFromDsl(dsl)
-        console.log('[ShadeRenderer] DSL effects:', effects.map(e => ({ name: e.name, fullName: e.fullName, temp: e.temp })))
         
         // Find all steps that use our effect
         for (const effect of effects) {
@@ -559,17 +539,14 @@ export class ShadeRenderer {
                 fullName === `synth.${effectFunc}` ||
                 (effectNs && fullName === `${effectNs}.${effectFunc}`)
             
-            console.log(`[ShadeRenderer] Checking effect: ${fullName} (short: ${shortName}) vs ${effectFunc} -> ${matches ? 'MATCH' : 'no match'}`)
             
             if (matches) {
                 // Apply workspace shaders for this step
                 const stepIndex = effect.temp
                 overrides[stepIndex] = workspaceShaders
-                console.log(`[ShadeRenderer] Applying workspace shaders to step ${stepIndex} (${fullName}):`, Object.keys(workspaceShaders))
             }
         }
         
-        console.log('[ShadeRenderer] Final overrides:', Object.keys(overrides).length ? overrides : 'none')
 
         return overrides
     }

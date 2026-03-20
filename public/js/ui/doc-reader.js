@@ -100,7 +100,7 @@ export function renderDocContent(markdown) {
         }
         
         fetch('/deployment-meta.json')
-            .then(r => r.json())
+            .then(r => r.ok ? r.json() : Promise.reject())
             .then(meta => {
                 const hash = meta.git_hash ? meta.git_hash.trim().slice(0, 8) : 'LOCAL'
                 let dateStr = 'n/a'
@@ -178,10 +178,10 @@ The definition file describes your effect's identity, parameters, and rendering 
 {
   "name": "Plasma Wave",
   "func": "plasmaWave",
-  "namespace": "synth",
+  "namespace": "user",
   "description": "Animated plasma effect",
   "starter": true,
-  "tags": ["noise", "animation"],
+  "tags": ["noise", "color"],
   "globals": {
     "scale": {
       "type": "float",
@@ -189,8 +189,8 @@ The definition file describes your effect's identity, parameters, and rendering 
       "min": 0.1,
       "max": 10.0
     },
-    "color": {
-      "type": "vec3",
+    "tint": {
+      "type": "color",
       "default": [1.0, 0.5, 0.0]
     }
   },
@@ -214,16 +214,17 @@ The definition file describes your effect's identity, parameters, and rendering 
 | \`name\` | string | Display name for the effect |
 | \`func\` | string | DSL function name (camelCase) |
 
+At least one of \`name\` or \`func\` must be provided. It is recommended to always provide \`func\` explicitly.
+
 ---
 
 ## Optional Fields
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| \`namespace\` | string | \`"synth"\` | Effect category |
+| \`namespace\` | string | \`"user"\` | Effect namespace |
 | \`description\` | string | \`""\` | Brief description |
 | \`starter\` | boolean | \`false\` | True if generates from nothing |
-| \`hasTex\` | boolean | \`false\` | True if accepts texture input |
 | \`tags\` | array | \`[]\` | Categorization tags |
 | \`globals\` | object | \`{}\` | Parameters/uniforms |
 | \`passes\` | array | auto | Render pass configuration |
@@ -262,8 +263,8 @@ Parameters expose shader uniforms to the UI and DSL:
 | \`int\` | \`int\` | \`4\` | Slider |
 | \`boolean\` | \`bool\` | \`true\` | Toggle |
 | \`vec2\` | \`vec2\` | \`[0.5, 0.5]\` | XY pad |
-| \`vec3\` | \`vec3\` | \`[1.0, 0.0, 0.5]\` | Color picker |
-| \`vec4\` / \`color\` | \`vec4\` | \`[1, 0, 0.5, 1]\` | Color picker |
+| \`vec3\` | \`vec3\` | \`[1.0, 0.0, 0.5]\` | Triple slider |
+| \`color\` | \`vec3\` | \`[1.0, 0.0, 0.5]\` | Color picker |
 
 ### Parameter Properties
 
@@ -271,11 +272,11 @@ Parameters expose shader uniforms to the UI and DSL:
 |----------|------|----------|-------------|
 | \`type\` | string | Yes | Data type |
 | \`default\` | varies | Yes | Default value |
-| \`uniform\` | string | No | GLSL uniform name |
-| \`min\` | number | No | Minimum value |
-| \`max\` | number | No | Maximum value |
-| \`step\` | number | No | Slider increment |
-| \`choices\` | object | No | Enum options |
+| \`uniform\` | string | No | GLSL uniform name (defaults to key) |
+| \`min\` | number | No | Minimum value (float/int only) |
+| \`max\` | number | No | Maximum value (float/int only, default 100) |
+| \`step\` | number | No | Slider increment (float/int only) |
+| \`choices\` | object | No | Enum options (int only) |
 
 ---
 
@@ -290,11 +291,10 @@ precision highp float;
 uniform vec2 resolution;
 uniform float time;
 
-in vec2 vUv;
 out vec4 fragColor;
 
 void main() {
-    vec2 uv = vUv;
+    vec2 uv = gl_FragCoord.xy / resolution;
     vec3 color = vec3(uv, 0.5);
     fragColor = vec4(color, 1.0);
 }
@@ -305,21 +305,21 @@ void main() {
 | Uniform | Type | Description |
 |---------|------|-------------|
 | \`resolution\` | \`vec2\` | Canvas size in pixels |
-| \`time\` | \`float\` | Normalized time 0.0–1.0 |
-| \`aspectRatio\` | \`float\` | Width / height |
+| \`time\` | \`float\` | Normalized time 0.0-1.0 |
+| \`aspect\` | \`float\` | Width / height |
 | \`frame\` | \`int\` | Current frame number |
-| \`mouse\` | \`vec4\` | Mouse state |
 
 ### Texture Coordinates
 
-\`vUv\` provides normalized coordinates:
+Use \`gl_FragCoord.xy / resolution\` for normalized coordinates:
 - Origin: bottom-left (0, 0)
 - Top-right: (1, 1)
 - Center: (0.5, 0.5)
 
 \`\`\`glsl
 // Center at origin, aspect-corrected
-vec2 centered = (vUv - 0.5) * vec2(aspectRatio, 1.0);
+vec2 uv = gl_FragCoord.xy / resolution;
+vec2 centered = (uv - 0.5) * vec2(aspect, 1.0);
 \`\`\`
 
 ---
@@ -339,7 +339,7 @@ For complex effects requiring multiple render passes:
     {
       "name": "blurH",
       "program": "blurH",
-      "inputs": { "inputTex": "inputTex" },
+      "inputs": { "inputTex": "source" },
       "outputs": { "fragColor": "_temp" }
     },
     {
@@ -365,6 +365,8 @@ Generate output from nothing (noise, shapes, patterns):
   "name": "Noise",
   "starter": true,
   "passes": [{
+    "name": "render",
+    "program": "main",
     "inputs": {},
     "outputs": { "fragColor": "outputTex" }
   }]
@@ -378,9 +380,11 @@ Process an input texture:
 \`\`\`json
 {
   "name": "Invert",
-  "hasTex": true,
+  "starter": false,
   "passes": [{
-    "inputs": { "inputTex": "inputTex" },
+    "name": "render",
+    "program": "main",
+    "inputs": { "inputTex": "source" },
     "outputs": { "fragColor": "outputTex" }
   }]
 }
@@ -392,17 +396,15 @@ Process an input texture:
 
 | Namespace | Description |
 |-----------|-------------|
-| \`io\` | Pipeline I/O functions (built-in, no search required) |
-| \`classicNoisedeck\` | Complex shaders ported from original noisedeck.app |
-| \`classicNoisemaker\` | Shader implementations of classic noisemaker effects |
+| \`user\` | User-created effects |
 | \`synth\` | Generator effects |
-| \`mixer\` | Blend two sources from A to B |
 | \`filter\` | Apply special effects to 2D input |
+| \`mixer\` | Blend two sources via \`tex:\` parameter |
 | \`render\` | Rendering utilities and feedback loops |
 | \`points\` | Particle and agent-based simulations |
 | \`synth3d\` | 3D volumetric generators |
 | \`filter3d\` | 3D volumetric processors |
-| \`user\` | User-defined effects |
+| \`classicNoisedeck\` | Complex shaders ported from original noisedeck.app |
 
 ---
 
@@ -413,8 +415,7 @@ Once registered, effects are called in DSL programs:
 \`\`\`
 search user
 
-myEffect(scale: 2.0, color: #ff8800)
-  .blur(radius: 5)
+myEffect(scale: 2.0, tint: #ff8800)
   .write(o0)
 
 render(o0)

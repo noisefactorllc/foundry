@@ -34,13 +34,13 @@ function getDefaultDsl() {
 search filter, classicNoisedeck
 
 pattern(
-  patternType: grid,
+  type: grid,
   scale: 62.57,
   lineWidth: 10,
   animation: panUp,
   color1: #222222
 )
-  .chromaticAberration(aberrationAmt: 12)
+  .chromaticAberration(aberration: 12)
   .lens(displacement: -0.1)
   .vignette(brightness: 0.12)
   .write(o0)
@@ -954,8 +954,6 @@ async function init() {
         
         paramControls.setProgramState(renderer.programState, 'step_0')
         
-        console.log('Foundry initialized')
-        console.log(`Loaded ${renderer.getEffectIds().length} effects from manifest`)
         
         // Populate effect list for dialog (will be updated with user effects later)
         allEffects = renderer.getEffectIds().map(id => {

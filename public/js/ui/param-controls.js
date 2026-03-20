@@ -72,7 +72,6 @@ export class ParamControls {
         
         // Subscribe to DSL load/recompile (updates all controls from new DSL values)
         this._stateLoadHandler = () => {
-            console.log('[ParamControls] ProgramState load event received')
             this._syncAllControlsFromState()
         }
         this.programState.on('load', this._stateLoadHandler)
@@ -89,18 +88,15 @@ export class ParamControls {
         
         // Get the effect definition from ProgramState (THE ONE SOURCE OF TRUTH)
         const effectDef = this.programState.getEffectDef(this.stepKey)
-        console.log('[ParamControls] _syncAllControlsFromState: effectDef:', effectDef?.name || effectDef?.func || 'null')
         
         // Get values from ProgramState (THE ONE SOURCE OF TRUTH)
         const stepValues = this.programState.getStepValues(this.stepKey) || {}
-        console.log('[ParamControls] _syncAllControlsFromState: stepValues:', Object.keys(stepValues))
         
         const newGlobals = effectDef?.globals || {}
         
         // ALWAYS update effect and re-render controls when DSL changes
         // No conditional logic - FORCE the update every time
         if (effectDef) {
-            console.log('[ParamControls] FORCING control update from ProgramState')
             this.effect = effectDef
             this.values = {}
             
@@ -118,7 +114,6 @@ export class ParamControls {
             this.render()
         } else {
             // No effect def but still update any existing controls with stepValues
-            console.log('[ParamControls] No effectDef, updating existing control values')
             for (const [name, value] of Object.entries(stepValues)) {
                 if (!name.startsWith('_')) {
                     this.values[name] = value

@@ -1,6 +1,6 @@
 # Foundry
 
-A pure effects editor with hot reload capability.
+A web-based effects editor with hot reload capability.
 
 ## Features
 
@@ -14,9 +14,10 @@ A pure effects editor with hot reload capability.
 ## Quick Start
 
 ```bash
-cd workspace
+git clone https://github.com/noisedeck/foundry.git
+cd foundry
 
-# First-time setup: Run the setup script to create symlinks
+# First-time setup: copies required resources from the shade/ sibling repo
 chmod +x setup.sh
 ./setup.sh
 
@@ -43,14 +44,13 @@ Open http://localhost:3000 in your browser.
 ## Architecture
 
 ```
-workspace/
+foundry/
 ├── server/
 │   └── index.js          # Express static server
 │
 └── public/
     ├── index.html        # Single-page app
     ├── css/              # Stylesheets
-    ├── fonts/            # Web fonts
     └── js/
         ├── app.js        # Main application
         ├── noisemaker/   # Shader rendering pipeline
@@ -64,26 +64,30 @@ workspace/
 
 ### Simple Pattern
 ```
-search synth
-pattern(patternType: grid, scale: 50)
-  .colorize(color1: #ff0000)
+search synth, filter
+
+pattern(type: grid, scale: 50)
+  .tint(color: #ff0000)
   .write(o0)
+
 render(o0)
 ```
 
 ### Animated Effect
 ```
 search synth, filter
-noise(scale: 100, animation: panUp)
-  .chromaticAberration(aberrationAmt: 10)
+
+noise(xScale: 50, yScale: 50, speed: 25)
+  .chromaticAberration(aberration: 10)
   .vignette()
   .write(o0)
+
 render(o0)
 ```
 
 ## Portable Effects
 
-Workspace supports the Portable Effects Format for creating and sharing custom shader effects.
+Foundry supports the Portable Effects Format for creating and sharing custom shader effects.
 
 See the **[Portable Effects Format](https://github.com/noisedeck/portable)** repository for:
 - Effect format specification
