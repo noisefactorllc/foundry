@@ -555,6 +555,10 @@ async function loadEffectToWorkspace(effectId, newName) {
 
         let dsl = renderer.buildDslSource(effect)
         if (dsl) {
+            // Replace original effect func name with the new name
+            if (newName && originalFunc && newName !== originalFunc) {
+                dsl = dsl.replaceAll(originalFunc, newName)
+            }
             // Add 'user' to the search directive while preserving original namespaces
             const searchMatch = dsl.match(/^search\s+(.+)$/m)
             if (searchMatch) {
@@ -722,10 +726,15 @@ async function recompileFromEditor() {
     if (!content.trim()) {
         return { success: false, error: 'Empty file' }
     }
-    
+
+    // Re-register the effect if definition.json or shaders changed
+    if (currentFile !== 'dsl.txt') {
+        registerEffectFromWorkspace(renderer)
+    }
+
     try {
-        const dsl = currentFile === 'dsl.txt' 
-            ? content 
+        const dsl = currentFile === 'dsl.txt'
+            ? content
             : (dslEditor?.value || workspaceStore.getFile('dsl.txt') || '')
         
         if (!dsl.trim()) {
