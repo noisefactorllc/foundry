@@ -22,6 +22,7 @@ body {
     color: var(--color-text-primary);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    scrollbar-color: var(--color-bg-active) var(--color-bg-elevated);
 }
 
 /* Main app container - full width canvas */

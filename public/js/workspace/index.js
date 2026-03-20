@@ -171,8 +171,7 @@ export function registerEffectFromWorkspace(renderer = null, dslOverride = null)
             passes,
             shaders,
             textures: def.textures || {},
-            uniformLayout: def.uniformLayout,
-            uniformLayouts: def.uniformLayouts,
+            asyncInit: async () => {},
             // 3D effect properties
             outputTex3d: def.outputTex3d || null,
             outputGeo: def.outputGeo || null
