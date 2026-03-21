@@ -198,7 +198,7 @@ The definition file describes your effect's identity, parameters, and rendering 
       "name": "render",
       "program": "main",
       "inputs": {},
-      "outputs": { "fragColor": "outputTex" }
+      "outputs": { "color": "outputTex" }
     }
   ]
 }
@@ -337,14 +337,14 @@ For complex effects requiring multiple render passes:
     {
       "name": "blurH",
       "program": "blurH",
-      "inputs": { "inputTex": "source" },
-      "outputs": { "fragColor": "_temp" }
+      "inputs": { "inputTex": "inputTex" },
+      "outputs": { "color": "_temp" }
     },
     {
       "name": "blurV",
       "program": "blurV",
       "inputs": { "inputTex": "_temp" },
-      "outputs": { "fragColor": "outputTex" }
+      "outputs": { "color": "outputTex" }
     }
   ]
 }
@@ -366,7 +366,7 @@ Generate output from nothing (noise, shapes, patterns):
     "name": "render",
     "program": "main",
     "inputs": {},
-    "outputs": { "fragColor": "outputTex" }
+    "outputs": { "color": "outputTex" }
   }]
 }
 \`\`\`
@@ -382,8 +382,8 @@ Process an input texture:
   "passes": [{
     "name": "render",
     "program": "main",
-    "inputs": { "inputTex": "source" },
-    "outputs": { "fragColor": "outputTex" }
+    "inputs": { "inputTex": "inputTex" },
+    "outputs": { "color": "outputTex" }
   }]
 }
 \`\`\`

@@ -143,7 +143,7 @@ export function registerEffectFromWorkspace(renderer = null, dslOverride = null)
                         name: 'render',
                         program: firstProgram,
                         inputs: {},
-                        outputs: { fragColor: 'outputTex' }
+                        outputs: { color: 'outputTex' }
                     }
                 ]
             } else {
@@ -152,8 +152,8 @@ export function registerEffectFromWorkspace(renderer = null, dslOverride = null)
                     {
                         name: 'render',
                         program: firstProgram,
-                        inputs: { inputTex: 'source' },
-                        outputs: { fragColor: 'outputTex' }
+                        inputs: { inputTex: 'inputTex' },
+                        outputs: { color: 'outputTex' }
                     }
                 ]
             }
