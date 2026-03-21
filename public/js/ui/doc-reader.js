@@ -178,7 +178,6 @@ The definition file describes your effect's identity, parameters, and rendering 
 {
   "name": "Plasma Wave",
   "func": "plasmaWave",
-  "namespace": "user",
   "description": "Animated plasma effect",
   "starter": true,
   "tags": ["noise", "color"],
@@ -222,7 +221,6 @@ At least one of \`name\` or \`func\` must be provided. It is recommended to alwa
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| \`namespace\` | string | \`"user"\` | Effect namespace |
 | \`description\` | string | \`""\` | Brief description |
 | \`starter\` | boolean | \`false\` | True if generates from nothing |
 | \`tags\` | array | \`[]\` | Categorization tags |
