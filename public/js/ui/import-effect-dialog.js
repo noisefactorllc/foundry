@@ -504,10 +504,10 @@ export class ImportEffectDialog {
 
                 const relativePath = basePath ? path.slice(basePath.length) : path
 
-                // Include definition, shader files, and dsl.txt
+                // Include definition, shader files, and help
                 if (relativePath === 'definition.json' ||
                     relativePath === 'definition.js' ||
-                    relativePath === 'dsl.txt' ||
+                    relativePath === 'help.md' ||
                     relativePath.startsWith('glsl/') ||
                     relativePath.startsWith('wgsl/')) {
                     

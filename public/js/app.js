@@ -366,13 +366,19 @@ importEffectDialog.onEffectImport(async ({ name, files }) => {
         }
     }
 
-    // Set DSL from the imported dsl.txt, or generate one from the effect name
-    let dsl = workspaceStore.files.get('dsl.txt')
-    if (!dsl) {
-        // Generate a simple DSL that invokes the effect
-        dsl = `search user\n\n${name}().write(o0)`
-        workspaceStore.files.set('dsl.txt', dsl)
+    // Get DSL from definition's defaultProgram, or generate one
+    let dsl = null
+    const defContent = workspaceStore.files.get('definition.json')
+    if (defContent) {
+        try {
+            const def = JSON.parse(defContent)
+            dsl = def.defaultProgram
+        } catch (e) { /* ignore parse errors */ }
     }
+    if (!dsl) {
+        dsl = `search user\n\n${name}().write(o0)`
+    }
+    workspaceStore.files.set('dsl.txt', dsl)
 
     // Register the effect (pass DSL so it can detect starter usage)
     await registerEffectFromWorkspace(null, dsl)
@@ -1616,14 +1622,20 @@ async function handleExport() {
         
         const files = workspaceStore.toObject()
         const dsl = dslEditor.value
-        
+
         const zip = new window.JSZip()
-        
-        // Add DSL
-        zip.file('dsl.txt', dsl)
-        
-        // Add all workspace files
+
+        // Add all workspace files, injecting defaultProgram into definition.json
         for (const [path, content] of Object.entries(files)) {
+            if (path === 'dsl.txt') continue
+            if (path === 'definition.json' && dsl) {
+                try {
+                    const def = JSON.parse(content)
+                    def.defaultProgram = dsl
+                    zip.file(path, JSON.stringify(def, null, 2))
+                    continue
+                } catch (e) { /* fall through to add as-is */ }
+            }
             zip.file(path, content)
         }
         
