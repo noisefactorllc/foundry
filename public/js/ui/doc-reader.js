@@ -135,7 +135,7 @@ Foundry is a distraction-free editor for portable GLSL and WGSL shader effects. 
 
 Foundry has a file workspace (see File menu) that lives in your browser. The app is focused on editing a single effect at a time.
 
-You can import any effect created with the [Portable Effect Format](https://github.com/noisedeck/portable).
+You can import any effect created with the [Portable Effect Format](https://github.com/noisefactorllc/portable).
 
 ---
 
@@ -423,7 +423,7 @@ render(o0)
 
 ---
 
-*For complete documentation, see [portable](https://github.com/noisedeck/portable)*
+*For complete documentation, see [portable](https://github.com/noisefactorllc/portable)*
 `
     renderDocContent(placeholder)
 }

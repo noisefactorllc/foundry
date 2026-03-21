@@ -14,7 +14,7 @@ A web-based effects editor with hot reload capability.
 ## Quick Start
 
 ```bash
-git clone https://github.com/noisedeck/foundry.git
+git clone https://github.com/noisefactorllc/foundry.git
 cd foundry
 
 # First-time setup: copies required resources from the shade/ sibling repo
@@ -89,7 +89,7 @@ render(o0)
 
 Foundry supports the Portable Effects Format for creating and sharing custom shader effects.
 
-See the **[Portable Effects Format](https://github.com/noisedeck/portable)** repository for:
+See the **[Portable Effects Format](https://github.com/noisefactorllc/portable)** repository for:
 - Effect format specification
 - Parameter definitions
 - Example effects
