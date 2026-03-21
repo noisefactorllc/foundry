@@ -258,7 +258,7 @@ export class ParamControls {
             this.container.innerHTML = `
                 <div class="empty-state">
                     <p>No custom parameters</p>
-                    <p class="hint">Standard uniforms available: time, resolution, aspectRatio</p>
+                    <p class="hint">Standard uniforms available: time, resolution, aspect</p>
                 </div>
             `
             this.onRender()
