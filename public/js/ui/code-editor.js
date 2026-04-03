@@ -912,7 +912,9 @@ class CodeEditor extends HTMLElement {
     }
 }
 
-// Register the custom element
-customElements.define('code-editor', CodeEditor)
+// Register the custom element (guard against double-registration from handfish bundle)
+if (!customElements.get('code-editor')) {
+    customElements.define('code-editor', CodeEditor)
+}
 
 export { CodeEditor }
