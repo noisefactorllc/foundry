@@ -35,10 +35,11 @@ search filter, classicNoisedeck, synth
 
 pattern(
   type: grid,
-  scale: 62.57,
-  lineWidth: 10,
-  animation: panUp,
-  color1: #222222
+  scale: 15,
+  thickness: 0.3,
+  animation: 2,
+  speed: 1,
+  fgColor: #222222
 )
   .chromaticAberration(aberration: 12)
   .lens(displacement: -0.1)
