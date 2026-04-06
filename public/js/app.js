@@ -31,7 +31,7 @@ import {
 
 function getDefaultDsl() {
     return `
-search filter, classicNoisedeck
+search filter, classicNoisedeck, synth
 
 pattern(
   type: grid,
