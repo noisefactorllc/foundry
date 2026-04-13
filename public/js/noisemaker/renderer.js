@@ -59,7 +59,7 @@ export class ShadeRenderer {
             basePath: 'https://shaders.noisedeck.app/0',
             preferWebGPU: this.preferWebGPU,
             useBundles: true,
-            bundlePath: 'https://shaders.noisedeck.app/0/effects',
+            bundlePath: 'https://shaders.noisedeck.app/1/effects',
             onFPS: options.onFPS,
             onError: options.onError
         })
