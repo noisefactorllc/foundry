@@ -33,6 +33,7 @@ const bundle = await import(bundlePath)
 
 // Re-export everything we need
 export const CanvasRenderer = bundle.CanvasRenderer
+export const Effect = bundle.Effect
 export const ProgramState = bundle.ProgramState
 export const registerEffect = bundle.registerEffect
 export const getEffect = bundle.getEffect

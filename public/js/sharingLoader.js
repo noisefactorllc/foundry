@@ -8,6 +8,7 @@
  */
 
 import {
+    Effect,
     registerEffect,
     registerOp,
     registerStarterOps,
@@ -54,17 +55,20 @@ export function registerPortableEffect(effectData) {
 
     const effectFunc = func || name
 
-    // Create an effect instance-like object
-    const instance = {
+    // Construct a real Effect instance so lifecycle hooks (asyncInit, onInit,
+    // onUpdate, onDestroy) inherit from Effect.prototype. Plain objects fail
+    // the pipeline's `effectDef.asyncInit === Effect.prototype.asyncInit` guard
+    // and crash compilation with `t.asyncInit is not a function`.
+    const instance = new Effect({
         name,
         namespace,
         func: effectFunc,
         description,
         tags,
         globals,
-        passes,
-        shaders
-    }
+        passes
+    })
+    instance.shaders = shaders
 
     // Determine if this is a starter effect (no pipeline inputs)
     const isStarter = checkIsStarter(instance)
