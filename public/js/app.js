@@ -36,7 +36,7 @@ search filter, classicNoisedeck, synth
 pattern(
   type: grid,
   scale: 15,
-  thickness: 0.3,
+  thickness: 0.1,
   animation: 2,
   speed: 1,
   fgColor: #222222
@@ -315,6 +315,14 @@ workspaceFilesDialog.onFileSelect((filePath) => {
     }
     switchEditorFile(filePath)
 })
+
+if (menuFilename) {
+    menuFilename.addEventListener('click', () => {
+        if (canvasEditorVisible) {
+            workspaceFilesDialog.open()
+        }
+    })
+}
 
 /**
  * Refresh the effect dialog with library effects + user saved effects

@@ -99,6 +99,16 @@
     text-overflow: ellipsis;
     max-width: 100%;
     opacity: 0.8;
+    cursor: pointer;
+}
+
+#menuFilename:empty {
+    cursor: default;
+}
+
+#menuFilename:hover:not(:empty) {
+    opacity: 1;
+    color: var(--color-text);
 }
 
 #menuRight {
