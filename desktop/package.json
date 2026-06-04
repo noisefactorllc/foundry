@@ -1,0 +1,65 @@
+{
+    "name": "foundry-desktop",
+    "version": "0.1.0",
+    "private": true,
+    "main": "main.js",
+    "description": "Foundry desktop wrapper (uses @nf/desktop-shell).",
+    "scripts": {
+        "predist": "node ../scripts/fetch-noisemaker.cjs",
+        "dev": "electron .",
+        "dist": "electron-builder",
+        "dist:mac": "electron-builder --mac",
+        "dist:win": "electron-builder --win",
+        "dist:linux": "electron-builder --linux"
+    },
+    "dependencies": {
+        "@nf/desktop-shell": "file:../../scaffold/apps/desktop-shell"
+    },
+    "devDependencies": {
+        "electron": "^42.3.0",
+        "electron-builder": "^26.8.1"
+    },
+    "build": {
+        "appId": "app.foundry.desktop",
+        "productName": "Noisedeck Foundry",
+        "directories": {
+            "output": "../dist-desktop",
+            "buildResources": "build-resources"
+        },
+        "files": [
+            "main.js",
+            "product.json",
+            "noisemaker.version.json",
+            "license-pub-v1.ed25519",
+            "package.json",
+            "node_modules/**",
+            { "from": "../public", "to": "app", "filter": ["**/*"] }
+        ],
+        "asar": true,
+        "asarUnpack": ["**/@nf/desktop-shell/assets/**"],
+        "mac": {
+            "target": [{ "target": "dmg", "arch": ["arm64"] }],
+            "category": "public.app-category.graphics-design",
+            "hardenedRuntime": true,
+            "gatekeeperAssess": false,
+            "entitlements": "build-resources/entitlements.mac.plist",
+            "entitlementsInherit": "build-resources/entitlements.mac.plist",
+            "identity": "Noise Factor LLC (TX27BNWUG9)",
+            "notarize": true
+        },
+        "win": {
+            "target": [{ "target": "nsis", "arch": ["x64"] }],
+            "signAndEditExecutable": false
+        },
+        "linux": {
+            "target": [{ "target": "AppImage", "arch": ["x64"] }],
+            "category": "Graphics",
+            "icon": "build-resources/icons",
+            "desktop": {
+                "entry": {
+                    "StartupWMClass": "foundry"
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Noisedeck Foundry
+Comment=Shader effect builder and editor
+Exec=AppRun %U
+Icon=foundry
+Type=Application
+Categories=Graphics;
+StartupWMClass=foundry

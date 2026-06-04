@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>app.foundry.desktop</id>
+  <name>Noisedeck Foundry</name>
+  <summary>Shader effect builder and editor</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>LicenseRef-proprietary=https://noisefactor.io/terms</project_license>
+  <developer id="io.noisefactor">
+    <name>Noise Factor LLC</name>
+  </developer>
+  <description>
+    <p>Foundry is a visual shader effect builder powered by the Noisemaker rendering engine.</p>
+  </description>
+  <url type="homepage">https://foundry.noisedeck.app</url>
+  <url type="bugtracker">https://github.com/noisefactorllc/foundry/issues</url>
+  <launchable type="desktop-id">foundry.desktop</launchable>
+  <content_rating type="oars-1.1" />
+  <releases>
+    <release version="0.1.0" date="2026-06-04" />
+  </releases>
+</component>
