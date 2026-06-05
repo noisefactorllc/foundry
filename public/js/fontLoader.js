@@ -7,7 +7,9 @@
  * @module fontLoader
  */
 
-const FONTS_BASE_URL = 'https://fonts.noisefactor.io'
+const FONTS_BASE_URL = (typeof window !== 'undefined' && window.electronAPI?.isElectron)
+    ? '../../../vendor/fonts.noisefactor.io'
+    : 'https://fonts.noisefactor.io'
 
 class FontLoader {
     constructor() {
