@@ -24,6 +24,7 @@
             "provider": "generic",
             "url": "https://downloads.noisefactor.io/updates/foundry"
         },
+        "dmg": {"writeUpdateInfo": false},
         "appId": "app.foundry.desktop",
         "productName": "Noisedeck Foundry",
         "directories": {
