@@ -20,6 +20,10 @@
         "electron-builder": "^26.8.1"
     },
     "build": {
+        "publish": {
+            "provider": "generic",
+            "url": "https://downloads.noisefactor.io/updates/foundry"
+        },
         "appId": "app.foundry.desktop",
         "productName": "Noisedeck Foundry",
         "directories": {
@@ -38,7 +42,7 @@
         "asar": true,
         "asarUnpack": ["**/@nf/desktop-shell/assets/**"],
         "mac": {
-            "target": [{ "target": "dmg", "arch": ["arm64"] }],
+            "target": [{ "target": "dmg", "arch": ["arm64"] }, { "target": "zip", "arch": ["arm64"] }],
             "category": "public.app-category.graphics-design",
             "hardenedRuntime": true,
             "gatekeeperAssess": false,
