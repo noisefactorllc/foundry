@@ -31,19 +31,10 @@ import {
 
 function getDefaultDsl() {
     return `
-search filter, classicNoisedeck, synth
+search synth, filter
 
-pattern(
-  type: grid,
-  scale: 15,
-  thickness: 0.1,
-  animation: 2,
-  speed: 1,
-  fgColor: #222222
-)
-  .chromaticAberration(aberration: 12)
-  .lens(displacement: -0.1)
-  .vignette(brightness: 0.12)
+solid()
+  .text(text: "Welcome to Foundry!", size: 0.05, font: 'Victor Mono')
   .write(o0)
 
 render(o0)
