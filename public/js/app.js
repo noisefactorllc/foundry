@@ -1184,9 +1184,32 @@ async function init() {
             updateUndoRedoButtons()
         })
 
-        workspaceStore.onChange(async () => {
-            await saveWorkspace(workspaceStore)
+        // Autosave is debounced so a burst of changes (undo checkpoints, slider
+        // drags, rapid edits) collapses to a single IndexedDB write. An
+        // `unsavedChanges` flag avoids redundant writes (a flush after the
+        // debounce already saved, or a tab-switch with nothing to save).
+        let unsavedChanges = false
+        const debouncedSave = debounce(() => {
+            if (!unsavedChanges) return
+            unsavedChanges = false
+            saveWorkspace(workspaceStore).catch(err => handleError(err, ErrorType.STORAGE))
+        }, 400)
+        workspaceStore.onChange(() => {
+            unsavedChanges = true
+            debouncedSave()
         })
+
+        // Durability: flush a pending save immediately when the tab is hidden or
+        // unloaded, since the debounce timer may not fire if the page is frozen.
+        const flushSave = () => {
+            if (!unsavedChanges) return
+            unsavedChanges = false
+            saveWorkspace(workspaceStore).catch(() => {})
+        }
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') flushSave()
+        })
+        window.addEventListener('pagehide', flushSave)
 
         let saveTimeout = null
         dslEditor?.addEventListener('input', () => {
