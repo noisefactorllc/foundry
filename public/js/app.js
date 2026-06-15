@@ -1541,7 +1541,7 @@ function setupMenuBar() {
     if (importFromUrlMenuItem) {
         importFromUrlMenuItem.addEventListener('click', () => {
             importFromUrlDialog.open({
-                onLoad: (composition) => handleLoadFromUrl(composition)
+                onLoad: (composition) => handleLoadFromUrl(composition).catch(err => handleError(err, ErrorType.UNKNOWN))
             })
             menu.querySelectorAll('.menu-items').forEach(el => el.classList.add('hide'))
         })
@@ -2228,7 +2228,7 @@ async function handleEditInPolymorphic() {
  * Handle loading a composition from a sharing URL
  * @param {object} composition - The loaded composition data
  */
-function handleLoadFromUrl(composition) {
+async function handleLoadFromUrl(composition) {
     if (!composition) return
     
     console.log('[Foundry] Loaded composition from URL:', composition.title || 'Untitled')
@@ -2291,11 +2291,24 @@ function handleLoadFromUrl(composition) {
             Array.from(workspaceStore.files.keys()))
     }
     
-    // Rebuild pipeline with new DSL
+    // Rebuild pipeline with new DSL. Await the recompile and surface its result
+    // (same pattern as the code-editor compile paths) — otherwise a composition
+    // whose DSL fails to compile would still report a false "Loaded" success
+    // while the canvas silently broke.
     if (composition.dsl) {
-        recompileFromEditor()
+        setAgentStatus('Compiling...')
+        const result = await recompileFromEditor()
+        if (!result.success) {
+            console.warn('Import compile failed:', result.error)
+            showCompilerError(result.error)
+            setAgentStatus('Error')
+            toast.error(`Imported "${composition.title || 'composition'}" but it failed to compile`)
+            return
+        }
+        hideCompilerError()
+        setAgentStatus('Ready')
     }
-    
+
     toast.success(`Loaded: ${composition.title || 'Imported composition'}`)
 }
 
