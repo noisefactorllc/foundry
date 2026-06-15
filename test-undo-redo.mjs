@@ -114,6 +114,30 @@ s = await state()
 if (!/noise/.test(s.dsl)) ok('undo reverts the editor edit')
 else fail('undo did not revert the editor edit')
 
+console.log('Same-tick undo+redo nets correctly and leaves history intact')
+await compile(B) // ensure B is current with A below it
+await page.evaluate(() => {
+    // Fire undo AND redo in the same synchronous tick. Restores are async and
+    // fire-and-forget; the depth-counter guard must keep checkpointing suppressed
+    // until BOTH finish so the concurrent restores can't corrupt history. (This
+    // exercises the rapid path; the underlying race is timing-dependent.)
+    document.body.focus()
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true }))
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, shiftKey: true, bubbles: true }))
+})
+await page.waitForTimeout(2500)
+s = await state()
+if (/noise/.test(s.dsl) && !/solid/.test(s.dsl)) ok('same-tick undo+redo nets to B (no corruption)')
+else fail(`same-tick undo+redo corrupted current state: ${s.dsl.replace(/\n/g, ' ')}`)
+// The entry below must still be intact: a further undo reaches A.
+await page.evaluate(() => {
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true }))
+})
+await page.waitForTimeout(1500)
+s = await state()
+if (/solid/.test(s.dsl)) ok('history below the race is intact (undo reaches A)')
+else fail(`history below the race was corrupted: ${s.dsl.replace(/\n/g, ' ')}`)
+
 await browser.close()
 console.log(failures === 0 ? '\nAll undo/redo checks passed' : `\n${failures} check(s) failed`)
 process.exit(failures === 0 ? 0 : 1)

@@ -1634,9 +1634,12 @@ async function autoSwitchBackend(backend) {
 // Undo / Redo
 // =========================================================================
 
-// Set while applying a restored history entry, so the recompile it triggers
-// doesn't record a brand-new checkpoint (which would corrupt the history).
-let restoringHistory = false
+// Depth counter: > 0 while ANY undo/redo restore is in flight, so the recompile
+// each one triggers doesn't record a brand-new checkpoint (which would corrupt
+// the history). A counter (not a boolean) is required because restores are async
+// and fire-and-forget — two in the same tick (e.g. undo+redo) must both keep the
+// guard raised until the LAST one finishes.
+let restoringHistory = 0
 
 const undoBtn = document.getElementById('undo-btn')
 const redoBtn = document.getElementById('redo-btn')
@@ -1657,7 +1660,7 @@ function currentProgramDsl() {
  * pushing a duplicate.
  */
 function maybeCheckpoint(label) {
-    if (restoringHistory) return
+    if (restoringHistory > 0) return
     const dsl = currentProgramDsl()
     if (!dsl.trim()) return
     const current = workspaceStore.getCurrentEntry()
@@ -1674,7 +1677,7 @@ const debouncedParamCheckpoint = debounce(() => maybeCheckpoint('Adjust paramete
 
 /** Apply a history entry restored by undo/redo to the editor + renderer. */
 async function applyRestoredState(detail) {
-    restoringHistory = true
+    restoringHistory++
     try {
         const dsl = (detail && detail.dsl && detail.dsl.trim())
             ? detail.dsl
@@ -1691,7 +1694,7 @@ async function applyRestoredState(detail) {
     } catch (err) {
         console.error('[App] Failed to apply restored state:', err)
     } finally {
-        restoringHistory = false
+        restoringHistory--
         updateUndoRedoButtons()
     }
 }
