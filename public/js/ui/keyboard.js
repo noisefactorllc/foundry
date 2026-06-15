@@ -13,6 +13,9 @@
  * @property {boolean} [meta] - Requires Cmd/Ctrl
  * @property {boolean} [shift] - Requires Shift
  * @property {boolean} [alt] - Requires Alt/Option
+ * @property {boolean} [skipInInput] - Don't fire while a text input/editor is
+ *   focused, even if it's a meta shortcut (e.g. undo/redo, so the editor's own
+ *   native text-undo keeps working)
  * @property {string} description - Human-readable description
  * @property {function} action - Function to execute
  */
@@ -92,9 +95,10 @@ export class KeyboardShortcuts {
         if (!this.enabled) return
 
         // Skip if typing in an input (unless it's a global shortcut with meta)
-        const isInput = e.target.tagName === 'INPUT' || 
-                       e.target.tagName === 'TEXTAREA'
-        
+        const isInput = e.target.tagName === 'INPUT' ||
+                       e.target.tagName === 'TEXTAREA' ||
+                       e.target.isContentEditable === true
+
         for (const shortcut of this.shortcuts) {
             const keyMatch = e.key.toLowerCase() === shortcut.key.toLowerCase()
             const metaMatch = !!shortcut.meta === (e.metaKey || e.ctrlKey)
@@ -102,8 +106,10 @@ export class KeyboardShortcuts {
             const altMatch = !!shortcut.alt === e.altKey
 
             if (keyMatch && metaMatch && shiftMatch && altMatch) {
-                // For inputs, only allow meta shortcuts
-                if (isInput && !shortcut.meta) continue
+                // In a text input/editor, skip non-meta shortcuts AND any shortcut
+                // that opts out via skipInInput (so the editor keeps its own native
+                // behavior, e.g. text-undo for Cmd+Z).
+                if (isInput && (!shortcut.meta || shortcut.skipInInput)) continue
 
                 e.preventDefault()
                 shortcut.action()

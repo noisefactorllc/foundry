@@ -23,7 +23,8 @@ import {
     saveUIState,
     loadUIState,
     addRecentEffect,
-    escapeHtml
+    escapeHtml,
+    debounce
 } from './utils/index.js'
 
 // =========================================================================
@@ -137,6 +138,7 @@ const paramControls = new ParamControls(paramsContainer, {
             renderer.render(pausedTime)
         }
         updateDslEditorFromState()
+        debouncedParamCheckpoint()
     }
 })
 
@@ -760,7 +762,14 @@ async function recompileFromEditor() {
                 return { success: false, error: `Invalid JSON: ${e.message}` }
             }
         }
-        
+
+        // Editing in the code editor compiles through here (not compileAndRun),
+        // so record the undo checkpoint here too. Deduped, so a Cmd+Enter that
+        // also triggers compileAndRun won't create a second entry.
+        if (result.success) {
+            maybeCheckpoint('Edit')
+        }
+
         return result
     } catch (err) {
         console.error('Recompile error:', err)
@@ -1166,6 +1175,15 @@ async function init() {
             await compileAndRun()
         })
 
+        // Apply undo/redo restores to the editor + renderer, and keep the
+        // undo/redo button states in sync with the history.
+        workspaceStore.onChange((detail) => {
+            if (detail.type === 'restore') {
+                applyRestoredState(detail)
+            }
+            updateUndoRedoButtons()
+        })
+
         workspaceStore.onChange(async () => {
             await saveWorkspace(workspaceStore)
         })
@@ -1232,8 +1250,17 @@ function registerKeyboardShortcuts() {
         {
             key: 'z',
             meta: true,
+            skipInInput: true,
             description: 'Undo',
             action: handleUndo
+        },
+        {
+            key: 'z',
+            meta: true,
+            shift: true,
+            skipInInput: true,
+            description: 'Redo',
+            action: handleRedo
         },
         {
             key: 'e',
@@ -1533,6 +1560,9 @@ async function compileAndRun() {
         showCompileStatus('Shader compiled', 'success')
         setOriginalDsl(dsl)
         setAgentStatus('Ready')
+        // Record an undo checkpoint for the committed program (deduped + guarded
+        // against firing during an undo/redo restore).
+        maybeCheckpoint('Compile')
     } else {
         showCompileStatus(`${result.error}`, 'error')
         setAgentStatus('Error')
@@ -1601,15 +1631,91 @@ async function autoSwitchBackend(backend) {
 }
 
 // =========================================================================
-// Undo/Export
+// Undo / Redo
 // =========================================================================
+
+// Set while applying a restored history entry, so the recompile it triggers
+// doesn't record a brand-new checkpoint (which would corrupt the history).
+let restoringHistory = false
+
+const undoBtn = document.getElementById('undo-btn')
+const redoBtn = document.getElementById('redo-btn')
+
+/** Current effective program (params baked in via toDsl), falling back to the editor. */
+function currentProgramDsl() {
+    try {
+        const live = renderer.programState?.toDsl?.()
+        if (live && live.trim()) return live
+    } catch (_) { /* toDsl unavailable */ }
+    return dslEditor.value || ''
+}
+
+/**
+ * Record an undo checkpoint of the current program, unless we're mid-restore or
+ * the program is unchanged. If the current entry was created without a DSL (e.g.
+ * a load checkpoint made before the first compile), fill it in rather than
+ * pushing a duplicate.
+ */
+function maybeCheckpoint(label) {
+    if (restoringHistory) return
+    const dsl = currentProgramDsl()
+    if (!dsl.trim()) return
+    const current = workspaceStore.getCurrentEntry()
+    if (current && current.dsl === dsl) return
+    if (current && !current.dsl) {
+        current.dsl = dsl
+    } else {
+        workspaceStore.checkpoint(label, { dsl })
+    }
+    updateUndoRedoButtons()
+}
+
+const debouncedParamCheckpoint = debounce(() => maybeCheckpoint('Adjust parameters'), 600)
+
+/** Apply a history entry restored by undo/redo to the editor + renderer. */
+async function applyRestoredState(detail) {
+    restoringHistory = true
+    try {
+        const dsl = (detail && detail.dsl && detail.dsl.trim())
+            ? detail.dsl
+            : (workspaceStore.getFile('dsl.txt') || '')
+        if (dsl) {
+            dslEditor.value = dsl
+            workspaceStore.setFile('dsl.txt', dsl)
+            if (canvasEditor && canvasEditorCurrentFile === 'dsl.txt') {
+                canvasEditor.value = dsl
+            }
+            await compileAndRun()
+        }
+        fileBrowser.render()
+    } catch (err) {
+        console.error('[App] Failed to apply restored state:', err)
+    } finally {
+        restoringHistory = false
+        updateUndoRedoButtons()
+    }
+}
+
+function updateUndoRedoButtons() {
+    if (undoBtn) undoBtn.disabled = !workspaceStore.canUndo()
+    if (redoBtn) redoBtn.disabled = !workspaceStore.canRedo()
+}
 
 function handleUndo() {
     if (workspaceStore.canUndo()) {
-        workspaceStore.undo()
+        workspaceStore.undo() // dispatches 'restore' → applyRestoredState
         toast.success('Undid change')
     } else {
         toast.info('Nothing to undo')
+    }
+}
+
+function handleRedo() {
+    if (workspaceStore.canRedo()) {
+        workspaceStore.redo() // dispatches 'restore' → applyRestoredState
+        toast.success('Redid change')
+    } else {
+        toast.info('Nothing to redo')
     }
 }
 
@@ -2173,6 +2279,8 @@ function handleLoadFromUrl(composition) {
 
 playPauseBtn.addEventListener('click', togglePlayPause)
 durationInput?.addEventListener('change', updateDuration)
+undoBtn?.addEventListener('click', handleUndo)
+redoBtn?.addEventListener('click', handleRedo)
 
 // =========================================================================
 // Start
