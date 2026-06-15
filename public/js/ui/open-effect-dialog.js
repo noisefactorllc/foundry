@@ -7,6 +7,8 @@
  * @module ui/open-effect-dialog
  */
 
+import { escapeHtml } from '../utils/html.js'
+
 // Inject styles once into document head
 const OPEN_EFFECT_DIALOG_STYLES_ID = 'open-effect-dialog-styles'
 if (!document.getElementById(OPEN_EFFECT_DIALOG_STYLES_ID)) {
@@ -378,8 +380,8 @@ export class OpenEffectDialog {
 
         this.resultsContainer.innerHTML = this.filteredEffects.map((effect, i) => `
             <div class="open-effect-item${i === this.selectedIndex ? ' selected' : ''}" 
-                 data-index="${i}" 
-                 data-id="${effect.id}"
+                 data-index="${i}"
+                 data-id="${this._escapeHtml(effect.id)}"
                  role="option"
                  aria-selected="${i === this.selectedIndex}">
                 <div class="open-effect-info">
@@ -459,6 +461,6 @@ export class OpenEffectDialog {
      * @private
      */
     _escapeHtml(str) {
-        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        return escapeHtml(str)
     }
 }

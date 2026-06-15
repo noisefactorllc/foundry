@@ -14,15 +14,16 @@ import { ImportEffectDialog } from './ui/import-effect-dialog.js'
 import { WorkspaceFilesDialog } from './ui/workspace-files-dialog.js'
 import { shareModal } from './ui/share-modal.js'
 import { loadFromCode, getCodeFromUrl } from './sharingLoader.js'
-import { 
-    errorHandler, 
+import {
+    errorHandler,
     handleError,
     ErrorType,
-    getPreferences, 
+    getPreferences,
     setPreference,
     saveUIState,
     loadUIState,
-    addRecentEffect
+    addRecentEffect,
+    escapeHtml
 } from './utils/index.js'
 
 // =========================================================================
@@ -651,8 +652,7 @@ function showCompilerError(errorText) {
         }
     }
     
-    const escaped = displayError.replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    compilerErrorEl.innerHTML = `<span>${escaped}</span>`
+    compilerErrorEl.innerHTML = `<span>${escapeHtml(displayError)}</span>`
     compilerErrorEl.title = errorText
     compilerErrorEl.classList.add('visible')
 }

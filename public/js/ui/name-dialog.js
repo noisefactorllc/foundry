@@ -7,6 +7,8 @@
  * @module ui/name-dialog
  */
 
+import { escapeHtml } from '../utils/html.js'
+
 /**
  * NameDialog class
  */
@@ -93,26 +95,26 @@ export class NameDialog {
         this.dialog.innerHTML = `
             <div class="modal-content name-dialog">
                 <div class="modal-header">
-                    <h2 id="name-dialog-title">${title}</h2>
+                    <h2 id="name-dialog-title">${escapeHtml(title)}</h2>
                     <button class="modal-close" aria-label="Close">
                         <span class="icon-material">close</span>
                     </button>
                 </div>
                 <div class="name-dialog-body">
-                    <label class="name-dialog-label" for="name-dialog-input">${label}</label>
-                    <input 
-                        type="text" 
+                    <label class="name-dialog-label" for="name-dialog-input">${escapeHtml(label)}</label>
+                    <input
+                        type="text"
                         id="name-dialog-input"
-                        class="name-dialog-input" 
-                        value="${this._escapeHtml(value)}" 
-                        placeholder="${placeholder}"
+                        class="name-dialog-input"
+                        value="${escapeHtml(value)}"
+                        placeholder="${escapeHtml(placeholder)}"
                         autocomplete="off"
                         spellcheck="false"
                     >
                 </div>
                 <div class="name-dialog-actions">
-                    <button class="action-btn name-dialog-cancel">${cancelText}</button>
-                    <button class="action-btn primary name-dialog-confirm">${confirmText}</button>
+                    <button class="action-btn name-dialog-cancel">${escapeHtml(cancelText)}</button>
+                    <button class="action-btn primary name-dialog-confirm">${escapeHtml(confirmText)}</button>
                 </div>
             </div>
         `
@@ -159,18 +161,6 @@ export class NameDialog {
             input.focus()
             setTimeout(() => input.classList.remove('shake'), 400)
         }
-    }
-
-    /**
-     * Escape HTML special characters
-     * @param {string} str
-     * @returns {string}
-     * @private
-     */
-    _escapeHtml(str) {
-        const div = document.createElement('div')
-        div.textContent = str
-        return div.innerHTML
     }
 }
 
@@ -257,13 +247,13 @@ export class ConfirmDialog {
             <div class="modal-content confirm-modal">
                 <div class="confirm-modal-content">
                     <div class="confirm-modal-icon">
-                        <span class="icon-material">${icon}</span>
+                        <span class="icon-material">${escapeHtml(icon)}</span>
                     </div>
-                    <h3 class="confirm-modal-title" id="confirm-dialog-title">${title}</h3>
-                    <p class="confirm-modal-message" id="confirm-dialog-message">${message}</p>
+                    <h3 class="confirm-modal-title" id="confirm-dialog-title">${escapeHtml(title)}</h3>
+                    <p class="confirm-modal-message" id="confirm-dialog-message">${escapeHtml(message)}</p>
                     <div class="confirm-modal-actions">
-                        <button class="action-btn confirm-dialog-cancel">${cancelText}</button>
-                        <button class="action-btn ${dangerClass} confirm-dialog-confirm">${confirmText}</button>
+                        <button class="action-btn confirm-dialog-cancel">${escapeHtml(cancelText)}</button>
+                        <button class="action-btn ${dangerClass} confirm-dialog-confirm">${escapeHtml(confirmText)}</button>
                     </div>
                 </div>
             </div>

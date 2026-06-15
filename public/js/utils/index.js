@@ -4,6 +4,7 @@
  * @module utils
  */
 
+export { escapeHtml } from './html.js'
 export { errorHandler, handleError, ErrorType } from './error-handler.js'
 export { 
     storage,

@@ -8,6 +8,7 @@
 
 import { listWorkspaces, deleteWorkspace } from '../workspace/index.js'
 import { confirmDialog } from './name-dialog.js'
+import { escapeHtml } from '../utils/html.js'
 
 // Inject styles once into document head
 const DELETE_EFFECT_DIALOG_STYLES_ID = 'delete-effect-dialog-styles'
@@ -400,8 +401,8 @@ export class DeleteEffectDialog {
 
         this.resultsContainer.innerHTML = this.filteredEffects.map((effect, i) => `
             <div class="delete-effect-item${i === this.selectedIndex ? ' selected' : ''}" 
-                 data-index="${i}" 
-                 data-id="${effect.id}"
+                 data-index="${i}"
+                 data-id="${this._escapeHtml(effect.id)}"
                  role="option"
                  aria-selected="${i === this.selectedIndex}">
                 <span class="delete-effect-icon icon-material">folder</span>
@@ -526,7 +527,7 @@ export class DeleteEffectDialog {
      * @private
      */
     _escapeHtml(str) {
-        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        return escapeHtml(str)
     }
 }
 

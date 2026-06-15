@@ -6,6 +6,8 @@
  * @module ui/toast
  */
 
+import { escapeHtml } from '../utils/html.js'
+
 /**
  * Toast class
  */
@@ -28,9 +30,11 @@ export class Toast {
         toast.className = `toast toast-${type}`
         
         const icon = this._getIcon(type)
+        // message may contain untrusted text (e.g. a shared composition title
+        // or an error string), so escape it before inserting as HTML.
         toast.innerHTML = `
             <span class="toast-icon">${icon}</span>
-            <span class="toast-message">${message}</span>
+            <span class="toast-message">${escapeHtml(message)}</span>
             <button class="toast-close" aria-label="Dismiss"><span class="icon-material">close</span></button>
         `
 

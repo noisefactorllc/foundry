@@ -7,6 +7,7 @@
  */
 
 import { loadFromCode } from '../sharingLoader.js'
+import { escapeHtml } from '../utils/html.js'
 
 // Inject styles once
 const STYLES_ID = 'import-from-url-dialog-styles'
@@ -341,8 +342,9 @@ export class ImportFromUrlDialog {
         try {
             const result = await loadFromCode(code)
             
-            // Show info
-            let info = `<b>${result.title || 'Untitled'}</b>`
+            // Show info. result.title comes from the shared composition (untrusted),
+            // so it must be escaped before being inserted as HTML.
+            let info = `<b>${escapeHtml(result.title || 'Untitled')}</b>`
             if (result.effects.length > 0) {
                 info += `<br>${result.effects.length} custom effect${result.effects.length > 1 ? 's' : ''} loaded`
             }

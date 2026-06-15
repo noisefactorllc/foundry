@@ -5,6 +5,8 @@
  * @module ui/doc-reader
  */
 
+import { escapeHtml } from '../utils/html.js'
+
 let docReaderPanel = null
 let docReaderContent = null
 
@@ -76,8 +78,14 @@ export function isDocReaderVisible() {
 }
 
 /**
- * Render markdown content in the doc reader
- * @param {string} markdown - The markdown content to render
+ * Render markdown content in the doc reader.
+ *
+ * NOTE: `marked.parse()` does not sanitize HTML embedded in the markdown.
+ * Only pass trusted markdown to this function (e.g. the built-in placeholder
+ * docs). Rendering untrusted content (such as an imported/shared effect's
+ * help.md) would require sanitizing the output first.
+ *
+ * @param {string} markdown - The trusted markdown content to render
  */
 export function renderDocContent(markdown) {
     if (!docReaderContent) return
@@ -119,7 +127,7 @@ export function renderDocContent(markdown) {
         docReaderContent.scrollTop = 0
     } else {
         // Fallback: display as preformatted text
-        docReaderContent.innerHTML = `<pre>${markdown}</pre>`
+        docReaderContent.innerHTML = `<pre>${escapeHtml(markdown)}</pre>`
     }
 }
 

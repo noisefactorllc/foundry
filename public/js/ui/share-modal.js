@@ -8,6 +8,7 @@
 
 import { toast } from './toast.js'
 import { workspaceStore } from '../workspace/index.js'
+import { escapeHtml } from '../utils/html.js'
 
 const SHARE_API_URL = 'https://sharing.noisedeck.app/api/embed/shorten'
 
@@ -465,9 +466,7 @@ export class ShareModal {
      * @private
      */
     _escapeHtml(str) {
-        const div = document.createElement('div')
-        div.textContent = str
-        return div.innerHTML
+        return escapeHtml(str)
     }
 
     /**

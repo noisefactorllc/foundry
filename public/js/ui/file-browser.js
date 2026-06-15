@@ -7,6 +7,7 @@
  */
 
 import { workspaceStore } from '../workspace/index.js'
+import { escapeHtml } from '../utils/html.js'
 
 /**
  * FileBrowser class
@@ -94,7 +95,7 @@ export class FileBrowser {
             dirEl.style.paddingLeft = `${8 + depth * 16}px`
             dirEl.innerHTML = `
                 <span class="file-icon icon-material">folder</span>
-                <span class="file-name">${name}/</span>
+                <span class="file-name">${escapeHtml(name)}/</span>
             `
             container.appendChild(dirEl)
 
@@ -112,7 +113,7 @@ export class FileBrowser {
             fileEl.style.paddingLeft = `${8 + depth * 16}px`
             fileEl.innerHTML = `
                 <span class="file-icon">${this._getFileIcon(file.name)}</span>
-                <span class="file-name">${file.name}</span>
+                <span class="file-name">${escapeHtml(file.name)}</span>
             `
             fileEl.addEventListener('click', () => this._selectFile(file.path))
             container.appendChild(fileEl)

@@ -6,6 +6,8 @@
  * @module ui/param-controls
  */
 
+import { escapeHtml } from '../utils/html.js'
+
 /**
  * ParamControls class
  *
@@ -132,7 +134,9 @@ export class ParamControls {
      * @private
      */
     _updateControlValue(name, value) {
-        const input = this.container.querySelector(`[data-param="${name}"]`)
+        // CSS.escape the name: param names come from untrusted effect definitions
+        // and may contain characters that would break the attribute selector.
+        const input = this.container.querySelector(`[data-param="${CSS.escape(name)}"]`)
         if (input) {
             if (input.type === 'checkbox') {
                 input.checked = value
@@ -373,11 +377,11 @@ export class ParamControls {
 
         return `
             <div class="param-label">
-                <span>${label}</span>
-                <span class="param-value">${this._formatValue(value)}</span>
+                <span>${escapeHtml(label)}</span>
+                <span class="param-value">${escapeHtml(this._formatValue(value))}</span>
             </div>
-            <input type="range" class="param-slider" data-param="${name}"
-                   min="${min}" max="${max}" step="${step}" value="${value}">
+            <input type="range" class="param-slider" data-param="${escapeHtml(name)}"
+                   min="${escapeHtml(min)}" max="${escapeHtml(max)}" step="${escapeHtml(step)}" value="${escapeHtml(value)}">
         `
     }
 
@@ -388,8 +392,8 @@ export class ParamControls {
     _createCheckbox(name, label, value) {
         return `
             <label class="param-checkbox">
-                <input type="checkbox" data-param="${name}" ${value ? 'checked' : ''}>
-                <span>${label}</span>
+                <input type="checkbox" data-param="${escapeHtml(name)}" ${value ? 'checked' : ''}>
+                <span>${escapeHtml(label)}</span>
             </label>
         `
     }
@@ -404,9 +408,9 @@ export class ParamControls {
 
         return `
             <div class="param-label">
-                <span>${label}</span>
+                <span>${escapeHtml(label)}</span>
             </div>
-            <input type="color" class="param-color" data-param="${name}" value="${hex}">
+            <input type="color" class="param-color" data-param="${escapeHtml(name)}" value="${escapeHtml(hex)}">
         `
     }
 
