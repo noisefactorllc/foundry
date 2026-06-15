@@ -83,6 +83,14 @@ class StorageService {
             return true
         } catch (e) {
             console.warn(`Failed to set storage key "${key}":`, e)
+            // Surface the failure (e.g. QuotaExceededError) instead of swallowing
+            // it. Dispatch an event rather than import the error handler/UI, to
+            // keep this util dependency-free (and unit-testable in Node).
+            if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+                window.dispatchEvent(new CustomEvent('shade:storage-error', {
+                    detail: { operation: 'save', key, error: e }
+                }))
+            }
             return false
         }
     }

@@ -10,6 +10,23 @@
 import { toast } from '../ui/index.js'
 
 /**
+ * Produce a readable message from an arbitrary thrown/rejected value.
+ * Avoids "[object Object]" for non-Error reasons (e.g. Promise.reject({...})).
+ * @param {*} error
+ * @returns {string}
+ */
+function describeError(error) {
+    if (error === null || error === undefined) return 'Unknown error'
+    if (typeof error === 'string') return error
+    if (typeof error.message === 'string' && error.message) return error.message
+    try {
+        const json = JSON.stringify(error)
+        if (json && json !== '{}') return json
+    } catch (_) { /* circular or non-serializable */ }
+    return String(error)
+}
+
+/**
  * Error types for categorization
  */
 export const ErrorType = {
@@ -34,7 +51,13 @@ class ErrorHandler {
         
         /** @type {boolean} */
         this.isRecovering = false
-        
+
+        /** @type {Map<string, number>} recent toast messages → timestamp (dedupe) */
+        this._recentToasts = new Map()
+
+        /** @type {number} dedupe window in ms */
+        this._dedupeWindow = 5000
+
         this._setupGlobalHandlers()
     }
 
@@ -43,16 +66,25 @@ class ErrorHandler {
      * @private
      */
     _setupGlobalHandlers() {
-        // Catch unhandled promise rejections
+        // Catch unhandled promise rejections — surface them (deduped) instead of
+        // swallowing silently, so failures like a rejected autosave are visible.
         window.addEventListener('unhandledrejection', (event) => {
-            this.handle(event.reason, ErrorType.UNKNOWN, false)
+            // Guard against a throw in handle() re-entering the global handlers.
+            try { this.handle(event.reason || 'Unhandled promise rejection', ErrorType.UNKNOWN, true) } catch (_) {}
             event.preventDefault()
         })
 
         // Catch uncaught errors
         window.addEventListener('error', (event) => {
-            this.handle(event.error || event.message, ErrorType.UNKNOWN, false)
+            try { this.handle(event.error || event.message || 'Unknown error', ErrorType.UNKNOWN, true) } catch (_) {}
             event.preventDefault()
+        })
+
+        // Surface storage write failures dispatched by utils/storage.js (kept
+        // decoupled from the UI via an event — see storage.js set()).
+        window.addEventListener('shade:storage-error', (event) => {
+            const { operation, error } = event.detail || {}
+            this.handleStorageError(operation || 'save', error || new Error('Storage error'))
         })
 
         // WebGL context lost
@@ -72,14 +104,15 @@ class ErrorHandler {
      * @returns {void}
      */
     handle(error, type = ErrorType.UNKNOWN, showToast = true) {
-        const message = error instanceof Error ? error.message : String(error)
+        const message = describeError(error)
         const stack = error instanceof Error ? error.stack : undefined
 
         // Log the error
         this._logError(type, message, stack)
 
-        // Show user feedback
-        if (showToast) {
+        // Show user feedback (de-duplicated so a repeating error can't storm the
+        // UI with identical toasts).
+        if (showToast && !this._isDuplicateToast(message)) {
             this._showErrorToast(type, message)
         }
 
@@ -162,6 +195,22 @@ class ErrorHandler {
                 toast.info('If rendering is broken, try refreshing the page.')
             }
         }, 5000)
+    }
+
+    /**
+     * Whether a toast with this message was shown within the dedupe window.
+     * Records the message timestamp as a side effect when it's new.
+     * @private
+     */
+    _isDuplicateToast(message) {
+        const now = Date.now()
+        // Prune stale entries.
+        for (const [msg, ts] of this._recentToasts) {
+            if (now - ts > this._dedupeWindow) this._recentToasts.delete(msg)
+        }
+        if (this._recentToasts.has(message)) return true
+        this._recentToasts.set(message, now)
+        return false
     }
 
     /**
