@@ -426,46 +426,6 @@ export class ShadeRenderer {
     }
 
     /**
-     * Parse text effect parameters from DSL argument string
-     * @param {string} argsStr - Arguments string from DSL
-     * @returns {object} Parsed parameters
-     * @private
-     */
-    _parseTextParams(argsStr) {
-        const params = {
-            text: 'Hello World',
-            font: 'Nunito',
-            size: 0.1,
-            posX: 0.5,
-            posY: 0.5,
-            rotation: 0,
-            color: '#ffffff',
-            bgColor: '#000000',
-            bgOpacity: 0,
-            justify: 'center'
-        }
-        
-        // Parse key: value pairs
-        const regex = /(\w+)\s*:\s*(?:"([^"]*)"|'([^']*)'|([^,\)]+))/g
-        let m
-        while ((m = regex.exec(argsStr)) !== null) {
-            const key = m[1]
-            const value = m[2] || m[3] || m[4]?.trim()
-            if (value !== undefined) {
-                if (key === 'text' || key === 'font' || key === 'justify') {
-                    params[key] = value
-                } else if (key === 'color' || key === 'bgColor') {
-                    params[key] = value
-                } else if (key === 'size' || key === 'posX' || key === 'posY' || key === 'rotation' || key === 'bgOpacity') {
-                    params[key] = parseFloat(value)
-                }
-            }
-        }
-        
-        return params
-    }
-
-    /**
      * Build shader overrides from workspace store
      * This allows workspace shaders to override library shaders for loaded effects.
      * 
@@ -658,40 +618,59 @@ export class ShadeRenderer {
     async switchBackend(backend, options = {}) {
         const wantWebGPU = backend === 'webgpu'
         const wasRunning = this._renderer.isRunning
-        
+
         // Stop render loop during switch
         if (wasRunning) {
             this._renderer.stop()
         }
-        
+
         this.preferWebGPU = wantWebGPU
-        
+
+        // Preserve live parameter edits across the switch. Recompile the CURRENT
+        // program (programState.toDsl() bakes in the user's param values) instead
+        // of this._currentDsl, which still holds the ORIGINAL defaults — otherwise
+        // every backend switch silently reverts the user's slider tweaks. Falls
+        // back to the last-compiled DSL if toDsl() is unavailable or throws.
+        let dslToCompile = this._currentDsl
+        try {
+            const liveDsl = this._programState?.toDsl?.()
+            if (liveDsl && liveDsl.trim()) {
+                dslToCompile = liveDsl
+            }
+        } catch (err) {
+            console.warn('[ShadeRenderer] switchBackend: toDsl() failed, using last compiled DSL:', err)
+        }
+
         try {
             await this._renderer.switchBackend(wantWebGPU ? 'wgsl' : 'glsl')
         } catch (err) {
             console.error('[ShadeRenderer] switchBackend failed:', err)
-            return { 
-                success: false, 
-                error: `Failed to switch to ${backend}: ${err.message || err}` 
+            // A failed switch must not leave a frozen canvas: restore the loop we
+            // stopped above so the previous backend keeps rendering.
+            if (wasRunning) this._renderer.start()
+            return {
+                success: false,
+                error: `Failed to switch to ${backend}: ${err.message || err}`
             }
         }
 
-        // Recompile THE ONE canonical DSL with new backend
-        if (this._currentDsl) {
-            const result = await this.compile(this._currentDsl, options)
+        // Recompile the current program with the new backend
+        if (dslToCompile) {
+            const result = await this.compile(dslToCompile, options)
             if (!result.success) {
-                return { 
-                    success: false, 
-                    error: `Backend switch succeeded but recompile failed: ${result.error}` 
+                if (wasRunning) this._renderer.start()
+                return {
+                    success: false,
+                    error: `Backend switch succeeded but recompile failed: ${result.error}`
                 }
             }
         }
-        
+
         // Restart if was running
         if (wasRunning) {
             this._renderer.start()
         }
-        
+
         return { success: true }
     }
 
