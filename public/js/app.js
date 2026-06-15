@@ -1150,7 +1150,13 @@ async function init() {
         }
 
         updateLoadingStatus('Compiling shaders')
-        
+
+        // Size the canvas to its container BEFORE the first compile so we render
+        // at the correct resolution from the start, not just after the first
+        // window resize. Mirrors the resize handler below.
+        const startupSize = resizeCanvas()
+        renderer.resize(startupSize.width, startupSize.height)
+
         await compileAndRun()
         renderer.start()
 
