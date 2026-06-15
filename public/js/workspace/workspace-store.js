@@ -128,6 +128,12 @@ export class WorkspaceStore extends EventTarget {
         for (const [path, content] of Object.entries(obj)) {
             this.files.set(path, content)
         }
+        // Loading a different effect must start a fresh history, exactly like
+        // clear(). Otherwise the previous effect's checkpoints survive and an
+        // undo() would restore THAT effect's files over the just-loaded one
+        // (cross-effect data corruption).
+        this.history = []
+        this.historyIndex = -1
         this._dispatchChange('load', { name })
     }
 

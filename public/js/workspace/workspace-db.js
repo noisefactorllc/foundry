@@ -21,7 +21,20 @@ function openDB() {
         const request = indexedDB.open(DB_NAME, DB_VERSION)
 
         request.onerror = () => reject(request.error)
-        request.onsuccess = () => resolve(request.result)
+
+        // If another tab/connection requests a version upgrade while this one is
+        // open, the upgrade is BLOCKED until we close. Without a handler the
+        // first DB_VERSION bump would hang every existing session forever.
+        request.onblocked = () =>
+            reject(new Error('IndexedDB upgrade blocked: another connection is holding an older version open'))
+
+        request.onsuccess = () => {
+            const db = request.result
+            // Auto-close when another connection needs to upgrade the schema, so
+            // we never block a future migration (and never serve a stale schema).
+            db.onversionchange = () => db.close()
+            resolve(db)
+        }
 
         request.onupgradeneeded = (event) => {
             const db = event.target.result
@@ -35,38 +48,77 @@ function openDB() {
 }
 
 /**
+ * Run a single transaction against the workspaces store, with correct
+ * connection lifecycle: the DB is always closed afterwards (success OR
+ * failure), and write transactions resolve on `tx.oncomplete` (durable commit)
+ * rather than on the request's `onsuccess` (which fires before commit).
+ *
+ * @param {IDBTransactionMode} mode - 'readonly' or 'readwrite'
+ * @param {(store: IDBObjectStore, capture: (value: any) => void) => void} run -
+ *   Issues the request(s); call `capture(value)` to set the resolved value.
+ * @returns {Promise<any>} Resolves with the captured value on tx completion.
+ */
+function withStore(mode, run) {
+    return new Promise((resolve, reject) => {
+        let settled = false
+        let db = null
+        const settle = (fn, arg) => {
+            if (settled) return
+            settled = true
+            if (db) { try { db.close() } catch (_) { /* already closing */ } }
+            fn(arg)
+        }
+
+        openDB().then((opened) => {
+            db = opened
+            let tx
+            try {
+                tx = db.transaction(STORE_NAME, mode)
+            } catch (err) {
+                settle(reject, err)
+                return
+            }
+
+            let result
+            tx.oncomplete = () => settle(resolve, result)
+            tx.onerror = () => settle(reject, tx.error || new Error('IndexedDB transaction failed'))
+            tx.onabort = () => settle(reject, tx.error || new Error('IndexedDB transaction aborted'))
+
+            try {
+                run(tx.objectStore(STORE_NAME), (value) => { result = value })
+            } catch (err) {
+                // Synchronous failures (e.g. DataCloneError from put()) don't
+                // always abort the tx on their own — do it so the connection
+                // closes and the promise rejects deterministically.
+                try { tx.abort() } catch (_) { /* may already be aborting */ }
+                settle(reject, err)
+            }
+        }).catch((err) => settle(reject, err))
+    })
+}
+
+/**
  * Save workspace to IndexedDB
  * @param {import('./workspace-store.js').WorkspaceStore} store - Workspace store
  * @param {string} [id='current'] - Workspace ID
  * @returns {Promise<void>}
  */
 export async function saveWorkspace(store, id = CURRENT_KEY) {
-    const db = await openDB()
+    // Convert Map to object for storage
+    const filesObj = {}
+    for (const [path, content] of store.files) {
+        filesObj[path] = content
+    }
 
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readwrite')
-        const objectStore = tx.objectStore(STORE_NAME)
+    const data = {
+        id,
+        name: store.name,
+        files: filesObj,
+        savedAt: Date.now()
+    }
 
-        // Convert Map to object for storage
-        const filesObj = {}
-        for (const [path, content] of store.files) {
-            filesObj[path] = content
-        }
-
-        const data = {
-            id,
-            name: store.name,
-            files: filesObj,
-            savedAt: Date.now()
-        }
-
-        const request = objectStore.put(data)
-
-        request.onerror = () => reject(request.error)
-        request.onsuccess = () => {
-            db.close()
-            resolve()
-        }
+    await withStore('readwrite', (objectStore) => {
+        objectStore.put(data)
     })
 }
 
@@ -77,28 +129,17 @@ export async function saveWorkspace(store, id = CURRENT_KEY) {
  * @returns {Promise<boolean>} Whether a workspace was loaded
  */
 export async function loadWorkspace(store, id = CURRENT_KEY) {
-    const db = await openDB()
-
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readonly')
-        const objectStore = tx.objectStore(STORE_NAME)
-
+    const data = await withStore('readonly', (objectStore, capture) => {
         const request = objectStore.get(id)
-
-        request.onerror = () => reject(request.error)
-        request.onsuccess = () => {
-            db.close()
-
-            const data = request.result
-            if (!data) {
-                resolve(false)
-                return
-            }
-
-            store.fromObject(data.files, data.name)
-            resolve(true)
-        }
+        request.onsuccess = () => capture(request.result)
     })
+
+    if (!data) {
+        return false
+    }
+
+    store.fromObject(data.files, data.name)
+    return true
 }
 
 /**
@@ -107,19 +148,8 @@ export async function loadWorkspace(store, id = CURRENT_KEY) {
  * @returns {Promise<void>}
  */
 export async function deleteWorkspace(id = CURRENT_KEY) {
-    const db = await openDB()
-
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readwrite')
-        const objectStore = tx.objectStore(STORE_NAME)
-
-        const request = objectStore.delete(id)
-
-        request.onerror = () => reject(request.error)
-        request.onsuccess = () => {
-            db.close()
-            resolve()
-        }
+    await withStore('readwrite', (objectStore) => {
+        objectStore.delete(id)
     })
 }
 
@@ -128,24 +158,16 @@ export async function deleteWorkspace(id = CURRENT_KEY) {
  * @returns {Promise<Array<{id: string, name: string, savedAt: number}>>}
  */
 export async function listWorkspaces() {
-    const db = await openDB()
-
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readonly')
-        const objectStore = tx.objectStore(STORE_NAME)
-
+    const all = await withStore('readonly', (objectStore, capture) => {
         const request = objectStore.getAll()
-
-        request.onerror = () => reject(request.error)
-        request.onsuccess = () => {
-            db.close()
-            resolve(request.result.map(w => ({
-                id: w.id,
-                name: w.name,
-                savedAt: w.savedAt
-            })))
-        }
+        request.onsuccess = () => capture(request.result)
     })
+
+    return (all || []).map(w => ({
+        id: w.id,
+        name: w.name,
+        savedAt: w.savedAt
+    }))
 }
 
 /**
