@@ -1024,8 +1024,9 @@ async function init() {
                     canvasEditorCurrentFile = 'dsl.txt'
                     updateMenuFilename()
                 }
-                await compileAndRun()
-                renderer.start()
+                // Compilation is deferred to the single compileAndRun() at the
+                // end of init(); compiling here too double-compiled the same
+                // program on every restored startup.
             }
             
             const defJson = workspaceStore.getFile('definition.json')
@@ -1111,10 +1112,9 @@ async function init() {
                 url.searchParams.delete('code')
                 window.history.replaceState({}, '', url.toString())
                 
-                // Compile and run
-                await compileAndRun()
-                renderer.start()
-                
+                // Compilation is deferred to the single compileAndRun() at the
+                // end of init() (avoids double-compiling on shared-link load).
+
                 // Show notification
                 setTimeout(() => {
                     toast.info(`Loaded: ${composition.title || 'Shared effect'}`)
