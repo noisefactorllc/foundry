@@ -35,10 +35,20 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event.workflow_run.event == 'pull_request'
     steps:
+      - name: Mint EHSRE app token
+        id: app-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: 2959521
+          private-key: ${{ secrets.EHSRE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-actions: read
+
       - name: Evaluate PR
         id: eval
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           REPO: ${{ github.repository }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
@@ -53,10 +63,13 @@ jobs:
             exit 0
           fi
 
-          # Verify every check_run for this SHA passed
-          CHECKS=$(gh api "repos/$REPO/commits/$HEAD_SHA/check-runs?per_page=100" --jq '.check_runs')
-          PENDING=$(echo "$CHECKS" | jq '[.[] | select(.status != "completed")] | length')
-          FAILED=$(echo "$CHECKS" | jq '[.[] | select(.conclusion=="failure" or .conclusion=="cancelled" or .conclusion=="timed_out")] | length')
+          # Verify every CI run for this SHA passed. The EHSRE app has no
+          # `checks` permission, so read Actions workflow runs (covered by
+          # `actions`) instead of check-runs. Consider only PR-triggered CI
+          # runs, which excludes this workflow_run-triggered auto-merge run.
+          RUNS=$(gh api "repos/$REPO/actions/runs?head_sha=$HEAD_SHA&per_page=100" --jq '.workflow_runs')
+          PENDING=$(echo "$RUNS" | jq '[.[] | select(.event=="pull_request" and .status != "completed")] | length')
+          FAILED=$(echo "$RUNS" | jq '[.[] | select(.event=="pull_request" and (.conclusion=="failure" or .conclusion=="cancelled" or .conclusion=="timed_out"))] | length')
 
           if [ "$PENDING" -gt 0 ]; then
             echo "$PENDING check(s) pending — wait for next workflow_run"
@@ -107,11 +120,11 @@ jobs:
       - name: Approve
         if: steps.eval.outputs.pr_num != ''
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: gh pr review --approve "${{ steps.eval.outputs.pr_num }}" -R "${{ github.repository }}" || true
 
       - name: Merge
         if: steps.eval.outputs.pr_num != ''
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: gh pr merge --squash --delete-branch "${{ steps.eval.outputs.pr_num }}" -R "${{ github.repository }}"
