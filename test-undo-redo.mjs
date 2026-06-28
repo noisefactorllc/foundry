@@ -32,11 +32,16 @@ if (!await page.evaluate(() => !!window.effectWorkspaceRenderer)) { fail('app di
 const A = 'search synth\n\nsolid()\n  .write(o0)\n\nrender(o0)'
 const B = 'search synth\n\nnoise()\n  .write(o0)\n\nrender(o0)'
 
-// Compile a program through the app's real Cmd+Enter path (so it checkpoints).
+// Compile a program through the app's real global Cmd+Enter path (so it
+// checkpoints). The code editor grabs focus on load and handles Cmd+Enter
+// itself; the global shortcut now defers to it when the editor is focused, so
+// blur first to drive the global compileAndRun path this helper targets (the
+// real path when the user isn't typing in the editor).
 async function compile(dsl) {
     await page.evaluate((d) => {
         const ed = document.getElementById('dsl-editor')
         ed.value = d
+        document.activeElement?.blur?.()
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true }))
     }, dsl)
     await page.waitForTimeout(1300)

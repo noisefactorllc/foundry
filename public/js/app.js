@@ -1169,10 +1169,14 @@ async function init() {
         await compileAndRun()
         renderer.start()
 
-        window.addEventListener('resize', async () => {
+        // Resize the canvas live on every event (cheap), but debounce the
+        // expensive recompile so dragging a window edge doesn't trigger a
+        // recompile storm (~60/s) of overlapping compileAndRun() calls.
+        const debouncedResizeCompile = debounce(() => { compileAndRun() }, 150)
+        window.addEventListener('resize', () => {
             const { width, height } = resizeCanvas()
             renderer.resize(width, height)
-            await compileAndRun()
+            debouncedResizeCompile()
         })
 
         // Apply undo/redo restores to the editor + renderer, and keep the
@@ -1262,7 +1266,15 @@ function registerKeyboardShortcuts() {
             key: 'Enter',
             meta: true,
             description: 'Compile and run DSL',
-            action: compileAndRun
+            action: () => {
+                // The code-editor component handles Cmd/Ctrl+Enter itself (it
+                // dispatches 'forcerecompile' -> recompileFromEditor). When it is
+                // focused, skip this global compile so one keypress doesn't fire
+                // two compiles. The editor is provided by an external bundle, so
+                // its keydown can't be stopped at the source — gate it here.
+                if (document.activeElement?.closest?.('code-editor')) return
+                compileAndRun()
+            }
         },
         {
             key: 's',
