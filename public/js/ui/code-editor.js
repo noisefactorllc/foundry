@@ -912,7 +912,12 @@ class CodeEditor extends HTMLElement {
     }
 }
 
-// Register the custom element (guard against double-registration from handfish bundle)
+// Register the custom element (guard against double-registration from handfish bundle).
+// NOTE: the handfish bundle (loaded via the index.html importmap) registers
+// `code-editor` first in production, so THIS class is a fallback that normally
+// does NOT run. Editing this file won't change the live editor — fix editor
+// behavior app-side (e.g. app.js gates the global Cmd+Enter shortcut). The live
+// editor still dispatches the 'forcerecompile' event app.js listens for.
 if (!customElements.get('code-editor')) {
     customElements.define('code-editor', CodeEditor)
 }

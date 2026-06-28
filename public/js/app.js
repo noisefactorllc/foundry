@@ -113,6 +113,10 @@ let performancePauseGraceEnd = 0
 let activeBottomLeftOverlay = null
 let canvasEditorVisible = true // Visible by default in Effect Workspace
 let canvasEditorCurrentFile = 'dsl.txt'
+// Set true for one tick when the editor handles Cmd+Enter itself (it dispatches
+// 'forcerecompile'), so the global Cmd+Enter shortcut can skip its own compile
+// and avoid a double. See the forcerecompile listener and the keyboard shortcut.
+let editorHandledForceRecompile = false
 
 // Editor hot reload state
 let hotReloadTimeout = null
@@ -841,8 +845,17 @@ function setupCanvasEditorHotReload() {
         }, 500)
     })
     
-    // Listen for forcerecompile event from CodeEditor (Ctrl/Cmd+Enter)
+    // Listen for forcerecompile event from the CodeEditor (Ctrl/Cmd+Enter).
+    // The editor is provided by an external bundle (handfish; the local
+    // public/js/ui/code-editor.js is a guarded-out fallback), so this event is
+    // our only hook into its Cmd+Enter. Flag it synchronously here so the global
+    // Cmd+Enter shortcut (which fires later in the same keydown bubble) skips its
+    // duplicate compile. If this event ever stops firing, the flag stays false
+    // and the global shortcut falls through to compile — fail-safe, never a
+    // silent no-op. Reset on the next microtask (after this keydown dispatch).
     canvasEditor.addEventListener('forcerecompile', async () => {
+        editorHandledForceRecompile = true
+        queueMicrotask(() => { editorHandledForceRecompile = false })
         if (hotReloadTimeout) {
             clearTimeout(hotReloadTimeout)
             hotReloadTimeout = null
@@ -1172,7 +1185,9 @@ async function init() {
         // Resize the canvas live on every event (cheap), but debounce the
         // expensive recompile so dragging a window edge doesn't trigger a
         // recompile storm (~60/s) of overlapping compileAndRun() calls.
-        const debouncedResizeCompile = debounce(() => { compileAndRun() }, 150)
+        const debouncedResizeCompile = debounce(() => {
+            compileAndRun().catch(() => { /* surfaced via compile status */ })
+        }, 150)
         window.addEventListener('resize', () => {
             const { width, height } = resizeCanvas()
             renderer.resize(width, height)
@@ -1267,13 +1282,13 @@ function registerKeyboardShortcuts() {
             meta: true,
             description: 'Compile and run DSL',
             action: () => {
-                // The code-editor component handles Cmd/Ctrl+Enter itself (it
-                // dispatches 'forcerecompile' -> recompileFromEditor). When it is
-                // focused, skip this global compile so one keypress doesn't fire
-                // two compiles. The editor is provided by an external bundle, so
-                // its keydown can't be stopped at the source — gate it here.
-                if (document.activeElement?.closest?.('code-editor')) return
-                compileAndRun()
+                // If the editor already handled this Cmd+Enter (it dispatched
+                // 'forcerecompile' -> recompileFromEditor earlier in this same
+                // keydown), skip so one keypress doesn't fire two compiles.
+                // Otherwise compile here — so the primary "run" gesture always
+                // works even if the editor isn't focused or doesn't self-handle.
+                if (editorHandledForceRecompile) return
+                compileAndRun().catch(() => { /* surfaced via compile status */ })
             }
         },
         {
