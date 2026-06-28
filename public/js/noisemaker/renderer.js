@@ -71,7 +71,8 @@ export class ShadeRenderer {
         this._hasCorruptedState = false // Flag to force fresh pipeline on next compile
         this._textCanvases = new Map() // Track text canvases for text effects
         this._uniformValues = {} // Track uniform values for DSL generation
-        
+        this._compileChain = Promise.resolve() // Serializes overlapping compile() calls
+
         // Create ProgramState - renderer is set in init() after CanvasRenderer is ready
         this._programState = new ProgramState()
     }
@@ -227,13 +228,42 @@ export class ShadeRenderer {
     // =========================================================================
 
     /**
-     * Compile a DSL program
+     * Compile a DSL program.
+     *
+     * Serialized: the compile body mutates shared wrapper state across `await`
+     * points (`_uniformValues`, `_textCanvases.clear()`+repopulate,
+     * `_currentDsl`/`_lastGoodDsl`/`_hasCorruptedState`, and a conditional
+     * pipeline dispose). Several UI paths can fire compile() while a previous one
+     * is still in flight (window-resize storm, Cmd+Enter, opening a saved
+     * effect); overlapping runs corrupt that state (blank canvas, missing text
+     * textures, stuck-"corrupted"). Each call is therefore chained after the
+     * previous one and runs strictly one at a time. The last caller's DSL still
+     * wins — only intermediate frames are skipped, so there is no API or visual
+     * change for callers that already awaited compile().
+     *
      * @param {string} dsl - DSL source code
      * @param {object} [options={}] - Compilation options
      * @param {object} [options.workspaceStore] - Workspace store with shader files
      * @returns {Promise<{success: boolean, error?: string}>}
      */
-    async compile(dsl, options = {}) {
+    compile(dsl, options = {}) {
+        // Chain on the previous compile's settlement (success OR failure, via the
+        // same handler for both) so one rejected link never breaks the queue.
+        // Each caller receives the promise for its own queued run.
+        const run = () => this._compile(dsl, options)
+        this._compileChain = this._compileChain.then(run, run)
+        return this._compileChain
+    }
+
+    /**
+     * Compile body — UNSYNCHRONIZED. Always call compile() instead, which
+     * serializes invocations; calling this directly can corrupt wrapper state.
+     * @param {string} dsl - DSL source code
+     * @param {object} [options={}] - Compilation options
+     * @returns {Promise<{success: boolean, error?: string}>}
+     * @private
+     */
+    async _compile(dsl, options = {}) {
         if (!this._initialized) {
             await this.init()
         }
