@@ -1545,6 +1545,15 @@ function setupMenuBar() {
         })
     }
 
+    // Edit in Noodles menu item
+    const editInNoodlesMenuItem = document.getElementById('editInNoodlesMenuItem')
+    if (editInNoodlesMenuItem) {
+        editInNoodlesMenuItem.addEventListener('click', () => {
+            handleEditInNoodles()
+            menu.querySelectorAll('.menu-items').forEach(el => el.classList.add('hide'))
+        })
+    }
+
     // Edit in Shade menu item
     const editInShadeMenuItem = document.getElementById('editInShadeMenuItem')
     if (editInShadeMenuItem) {
@@ -1825,6 +1834,7 @@ const SHARE_API_URL = 'https://sharing.noisedeck.app/api/embed/shorten'
 const NOISEDECK_URL = 'https://noisedeck.app'
 const SHADE_URL = 'https://shade.noisedeck.app'
 const POLYMORPHIC_URL = 'https://polymorphic.noisedeck.app'
+const NOODLES_URL = 'https://noodles.noisedeck.app'
 
 /**
  * Share the effect and open Shade in a new window
@@ -2108,6 +2118,147 @@ async function handleEditInNoisedeck() {
     } catch (error) {
         console.error('[Noisedeck] Error:', error)
         toast.error(`Failed to open in Noisedeck: ${error.message}`)
+    }
+}
+
+/**
+ * Share the effect and open Noodles in a new window
+ */
+async function handleEditInNoodles() {
+    // Get DSL with current parameter values
+    let dsl = dslEditor.value
+    if (!dsl) {
+        toast.warning('Nothing to edit. Create an effect first!')
+        return
+    }
+
+    // Try to get DSL with current param values from programState
+    if (renderer?.programState?.toDsl) {
+        try {
+            const dslWithParams = renderer.programState.toDsl()
+            if (dslWithParams && dslWithParams.trim()) {
+                dsl = dslWithParams
+            }
+        } catch (err) {
+            console.warn('[Noodles] Failed to get DSL from programState:', err)
+        }
+    }
+
+    toast.info('Opening in Noodles...')
+
+    try {
+        // Capture screenshot
+        let screenshot = null
+        try {
+            const targetWidth = 1200
+            const targetHeight = 630
+            const tempCanvas = document.createElement('canvas')
+            tempCanvas.width = targetWidth
+            tempCanvas.height = targetHeight
+            const ctx = tempCanvas.getContext('2d')
+            const sourceAspect = canvas.width / canvas.height
+            const targetAspect = targetWidth / targetHeight
+            let sx, sy, sw, sh
+            if (sourceAspect > targetAspect) {
+                sh = canvas.height
+                sw = canvas.height * targetAspect
+                sx = (canvas.width - sw) / 2
+                sy = 0
+            } else {
+                sw = canvas.width
+                sh = canvas.width / targetAspect
+                sx = 0
+                sy = (canvas.height - sh) / 2
+            }
+            ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, targetWidth, targetHeight)
+            screenshot = tempCanvas.toDataURL('image/jpeg', 0.85)
+        } catch (err) {
+            console.warn('[Noodles] Screenshot capture failed:', err)
+        }
+
+        // Create effect ZIP if we have workspace files
+        let effectZip = null
+        const files = workspaceStore.toObject()
+        const defJson = files['definition.json']
+        const glslFiles = Object.keys(files).filter(p => p.startsWith('glsl/') && p.endsWith('.glsl'))
+        const wgslFiles = Object.keys(files).filter(p => p.startsWith('wgsl/') && p.endsWith('.wgsl'))
+
+        if (defJson && (glslFiles.length > 0 || wgslFiles.length > 0)) {
+            try {
+                // Load JSZip if needed
+                if (!window.JSZip) {
+                    await new Promise((resolve, reject) => {
+                        const script = document.createElement('script')
+                        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'
+                        script.onload = resolve
+                        script.onerror = () => reject(new Error('Failed to load JSZip'))
+                        document.head.appendChild(script)
+                    })
+                }
+
+                const zip = new window.JSZip()
+                zip.file('definition.json', defJson)
+
+                // Add all GLSL shaders
+                for (const path of glslFiles) {
+                    zip.file(path, files[path])
+                }
+
+                // Add all WGSL shaders
+                for (const path of wgslFiles) {
+                    zip.file(path, files[path])
+                }
+
+                // Add help.md if present
+                if (files['help.md']) {
+                    zip.file('help.md', files['help.md'])
+                }
+
+                const zipBlob = await zip.generateAsync({ type: 'blob' })
+                const reader = new FileReader()
+                effectZip = await new Promise((resolve, reject) => {
+                    reader.onload = () => resolve(reader.result.split(',')[1])
+                    reader.onerror = reject
+                    reader.readAsDataURL(zipBlob)
+                })
+            } catch (err) {
+                console.warn('[Noodles] Effect ZIP creation failed:', err)
+            }
+        }
+
+        // Build payload
+        const payload = {
+            dsl,
+            title: workspaceStore.name || 'Foundry',
+            description: 'Created with Foundry',
+            ttlMinutes: 60
+        }
+        if (screenshot) payload.screenshot = screenshot
+        if (effectZip) payload.effects = [effectZip]
+
+        // Upload to sharing service
+        const response = await fetch(SHARE_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}))
+            throw new Error(errorData.details || errorData.error || `HTTP ${response.status}`)
+        }
+
+        const result = await response.json()
+        console.log('[Noodles] Share result:', result)
+
+        // Open Noodles with the short code
+        const noodlesUrl = `${NOODLES_URL}/?code=${result.code}`
+        window.open(noodlesUrl, '_blank')
+
+        toast.success('Opened in Noodles')
+    } catch (error) {
+        console.error('[Noodles] Error:', error)
+        toast.error(`Failed to open in Noodles: ${error.message}`)
     }
 }
 
