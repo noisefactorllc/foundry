@@ -146,6 +146,32 @@ const paramControls = new ParamControls(paramsContainer, {
     }
 })
 
+// Compile-time `define` params are baked into the shader source, so a uniform
+// write does nothing — the picture only changes on a recompile. ProgramState
+// emits `recompileNeeded` for any define-param mutation (already gated on a
+// real value change and coalesced across a batch), so we drive the recompile
+// off that rather than re-deriving it per widget.
+let defineRecompileTimer = null
+let defineRecompileInFlight = false
+function scheduleDefineRecompile() {
+    if (defineRecompileTimer) clearTimeout(defineRecompileTimer)
+    defineRecompileTimer = setTimeout(async () => {
+        defineRecompileTimer = null
+        // Don't overlap compiles; if a request lands mid-compile, re-defer it.
+        if (defineRecompileInFlight) { scheduleDefineRecompile(); return }
+        defineRecompileInFlight = true
+        try {
+            const result = await compileAndRun()
+            // Multi-pass library effects have incomplete workspace shaders; if
+            // the workspace recompile fails, fall back to the pristine library
+            // effect so define-param changes still take effect.
+            if (result && !result.success) await compileAndRun({})
+        } finally {
+            defineRecompileInFlight = false
+        }
+    }, 120)
+}
+
 /**
  * Update the DSL editor to show the current DSL with parameter values
  */
@@ -599,7 +625,50 @@ async function loadEffectToWorkspace(effectId, newName) {
             }
         }
 
-        await compileAndRun()
+        let compileResult = await compileAndRun()
+
+        // Filters/mixers/render stages need an input, but buildDslSource emits
+        // some of them first in the chain (e.g. `refract().write(o0)`) — illegal,
+        // so the effect never loads and its controls never appear. On a failed
+        // load, try wrapping the effect over a visible source. This only ever
+        // fires when the initial load already failed, so effects that load are
+        // untouched.
+        if (compileResult && !compileResult.success) {
+            const originalDsl = dslEditor.value
+            const func = instance.func || name
+            const ns = effect.namespace || 'filter'
+            const surfaces = Object.entries(instance.globals || {})
+                .filter(([, spec]) => spec && spec.type === 'surface')
+                .map(([key]) => key)
+            const candidates = [
+                // single-input filters / feedback effects
+                `search ${ns}, synth\n\nnoise()\n  .${func}()\n  .write(o0)\n\nrender(o0)`,
+                // mixers that read named input surfaces (rTex/gTex/source/...)
+                surfaces.length
+                    ? `search ${ns}, synth\n\nnoise().write(o0)\n${func}(${surfaces.map(s => `${s}: o0`).join(', ')}).write(o1)\n\nrender(o1)`
+                    : null,
+                // points-render stages need a points emitter upstream
+                `search ${ns}, points, synth\n\nnoise().pointsEmit().${func}().write(o0)\n\nrender(o0)`,
+                // 3D render/filter stages need a 3D field source upstream
+                `search ${ns}, synth3d, synth\n\nnoise3d().${func}().write(o0)\n\nrender(o0)`,
+            ].filter(Boolean)
+            for (const candidate of candidates) {
+                dslEditor.value = candidate
+                compileResult = await compileAndRun()
+                if (compileResult && compileResult.success) break
+                // Multi-pass effects (feedback, billboard render, ...) whose
+                // workspace shaders are incomplete still compile against the
+                // pristine library effect — retry the same DSL without the
+                // workspace override.
+                compileResult = await compileAndRun({})
+                if (compileResult && compileResult.success) break
+            }
+            // No wrapper compiled: don't leave the editor showing an unrelated
+            // fallback DSL — restore the effect's own source.
+            if (compileResult && !compileResult.success) {
+                dslEditor.value = originalDsl
+            }
+        }
 
         toast.success(`Loaded ${effectId}`)
         return true
@@ -916,6 +985,9 @@ document.querySelectorAll('.canvas-overlay .overlay-close-btn').forEach(btn => {
     })
 })
 
+// The params overlay has no overlay-header; <effect-controls> closes itself.
+paramsOverlay?.addEventListener('panelclose', () => showBottomLeftOverlay(null))
+
 // Toggle button handlers
 toggleSavedOverlay?.addEventListener('click', () => showBottomLeftOverlay('saved'))
 toggleDslOverlay?.addEventListener('click', toggleCanvasEditor)
@@ -989,7 +1061,9 @@ async function init() {
         
         await renderer.init()
         
-        paramControls.setProgramState(renderer.programState, 'step_0')
+        paramControls.setProgramState(renderer.programState, () => renderer.enums)
+        // Recompile when a compile-time `define` param changes (engine signals this).
+        renderer.programState?.on?.('recompileNeeded', scheduleDefineRecompile)
         
         
         // Populate effect list for dialog (will be updated with user effects later)
@@ -1602,18 +1676,21 @@ function setupMenuBar() {
 // Compilation
 // =========================================================================
 
-async function compileAndRun() {
+async function compileAndRun(compileOpts) {
     const dsl = dslEditor.value.trim()
     if (!dsl) {
         showCompileStatus('No DSL program to compile', 'error')
-        return
+        return { success: false, error: 'No DSL program to compile' }
     }
 
     showCompileStatus('Compiling shader...', '')
     setAgentStatus('Compiling...')
 
     await preloadFontsForDsl(dsl)
-    const result = await renderer.compile(dsl, { workspaceStore })
+    // Callers may pass {} to compile the pristine library effect instead of the
+    // workspace copy — used as a load fallback for multi-pass effects whose
+    // workspace shaders are incomplete.
+    const result = await renderer.compile(dsl, compileOpts || { workspaceStore })
 
     if (result.success) {
         showCompileStatus('Shader compiled', 'success')
@@ -1626,6 +1703,7 @@ async function compileAndRun() {
         showCompileStatus(`${result.error}`, 'error')
         setAgentStatus('Error')
     }
+    return result
 }
 
 function showCompileStatus(message, type) {

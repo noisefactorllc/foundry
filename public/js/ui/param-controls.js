@@ -1,470 +1,163 @@
 /**
- * Parameter Controls UI Component
+ * Param Controls
  *
- * Generates UI controls for effect parameters (globals).
+ * Drives the <effect-controls> panel for the effect currently being edited.
+ *
+ * The panel is the same component Polymorphic uses, so the layout, widget set,
+ * and DSL round-trip all match it. This module only answers "which effect is
+ * being edited, and where does it sit in the compiled chain?", and keeps the
+ * call surface app.js and the chat ToolExecutor depend on.
  *
  * @module ui/param-controls
  */
 
-import { escapeHtml } from '../utils/html.js'
+import './effect-controls.js'
 
-/**
- * ParamControls class
- *
- * @example
- * const controls = new ParamControls(containerEl, {
- *     onChange: (name, value) => renderer.setUniform(name, value)
- * });
- * controls.setEffect(effectInstance);
- */
 export class ParamControls {
     /**
-     * Create a new ParamControls
-     * @param {HTMLElement} container - Container element
-     * @param {object} [options] - Options
-     * @param {function} [options.onChange] - Called when a parameter changes
-     * @param {function} [options.onRender] - Called when controls are re-rendered
+     * @param {HTMLElement} container - Mount point (the params overlay body)
+     * @param {object} [options]
+     * @param {(name: string, value: any) => void} [options.onChange] - Fired per committed edit
      */
     constructor(container, options = {}) {
         this.container = container
         this.onChange = options.onChange || (() => {})
-        this.onRender = options.onRender || (() => {})
+
+        /** The effect being edited — an effect instance, or {globals} from definition.json. */
         this.effect = null
-        this.values = {}
-        
-        // ProgramState integration (Phase 3 migration)
         this.programState = null
-        this.stepKey = null
-        this._stateChangeHandler = null
-        this._stateLoadHandler = null
+
+        this._shownSignature = null
+        this._stateListener = null
+        // Provides the engine's enum table (channel/color/etc). member and
+        // enum-int dropdowns build their options from it; without it those
+        // dropdowns render empty and can't be changed.
+        this._enumsProvider = null
+
+        this._empty = document.createElement('div')
+        this._empty.className = 'empty-state'
+        this._empty.textContent = 'Load an effect to see parameters'
+
+        this._panel = document.createElement('effect-controls')
+        this._panel.addEventListener('paramchange', (e) => {
+            this.onChange(e.detail.paramName, e.detail.value)
+        })
+
+        this.container.innerHTML = ''
+        this.container.appendChild(this._empty)
+        this.container.appendChild(this._panel)
+    }
+
+    /** The step the panel is bound to, or null when nothing is shown. */
+    get stepKey() {
+        const info = this._panel.effectInfo
+        return info ? `step_${info.stepIndex}` : null
     }
 
     /**
-     * Set the ProgramState reference
-     * @param {object} programState - ProgramState instance
-     * @param {string} [stepKey='step_0'] - Which step these controls are for
+     * @param {object} programState - The engine's ProgramState for the live program
      */
-    setProgramState(programState, stepKey = 'step_0') {
-        // Remove previous listeners if any
-        if (this.programState) {
-            if (this._stateChangeHandler) {
-                this.programState.off('change', this._stateChangeHandler)
-            }
-            if (this._stateLoadHandler) {
-                this.programState.off('load', this._stateLoadHandler)
-            }
+    setProgramState(programState, enumsProvider) {
+        if (this.programState?.off && this._stateListener) {
+            this.programState.off('load', this._stateListener)
+            this.programState.off('structurechange', this._stateListener)
         }
-        
         this.programState = programState
-        this.stepKey = stepKey
-        
-        // Guard: programState might not be available yet
-        if (!programState) {
-            console.warn('[ParamControls] setProgramState called with undefined programState')
-            return
+        this._panel.programState = programState
+        if (enumsProvider) this._enumsProvider = enumsProvider
+        if (programState?.on) {
+            this._stateListener = () => this._sync()
+            programState.on('load', this._stateListener)
+            programState.on('structurechange', this._stateListener)
         }
-        
-        // Subscribe to individual value changes (from slider movements)
-        this._stateChangeHandler = ({ stepKey: changedKey, paramName, value }) => {
-            if (changedKey === this.stepKey) {
-                this._updateControlValue(paramName, value)
-            }
-        }
-        this.programState.on('change', this._stateChangeHandler)
-        
-        // Subscribe to DSL load/recompile (updates all controls from new DSL values)
-        this._stateLoadHandler = () => {
-            this._syncAllControlsFromState()
-        }
-        this.programState.on('load', this._stateLoadHandler)
+        this._sync()
     }
 
     /**
-     * Sync all controls to current ProgramState values
-     * Called when DSL is compiled/recompiled
-     * FORCES update on EVERY change - no conditional logic
-     * @private
-     */
-    _syncAllControlsFromState() {
-        if (!this.programState || !this.stepKey) return
-        
-        // Get the effect definition from ProgramState (THE ONE SOURCE OF TRUTH)
-        const effectDef = this.programState.getEffectDef(this.stepKey)
-        
-        // Get values from ProgramState (THE ONE SOURCE OF TRUTH)
-        const stepValues = this.programState.getStepValues(this.stepKey) || {}
-        
-        const newGlobals = effectDef?.globals || {}
-        
-        // ALWAYS update effect and re-render controls when DSL changes
-        // No conditional logic - FORCE the update every time
-        if (effectDef) {
-            this.effect = effectDef
-            this.values = {}
-            
-            // Initialize values from ProgramState, falling back to defaults
-            for (const [name, spec] of Object.entries(newGlobals)) {
-                if (stepValues[name] !== undefined) {
-                    this.values[name] = stepValues[name]
-                } else if (spec.default !== undefined) {
-                    this.values[name] = spec.default
-                } else {
-                    this.values[name] = this._getDefaultForType(spec.type)
-                }
-            }
-            
-            this.render()
-        } else {
-            // No effect def but still update any existing controls with stepValues
-            for (const [name, value] of Object.entries(stepValues)) {
-                if (!name.startsWith('_')) {
-                    this.values[name] = value
-                    this._updateControlValue(name, value)
-                }
-            }
-            // Still notify that an update happened (for overlay sync)
-            this.onRender()
-        }
-    }
-
-    /**
-     * Update a control's displayed value (internal, called on ProgramState change)
-     * @param {string} name - Parameter name
-     * @param {any} value - New value
-     * @private
-     */
-    _updateControlValue(name, value) {
-        // CSS.escape the name: param names come from untrusted effect definitions
-        // and may contain characters that would break the attribute selector.
-        const input = this.container.querySelector(`[data-param="${CSS.escape(name)}"]`)
-        if (input) {
-            if (input.type === 'checkbox') {
-                input.checked = value
-            } else if (input.type === 'color') {
-                const type = this.effect?.globals?.[name]?.type || 'vec4'
-                input.value = type === 'vec3' || type === 'vec4' ? this._vec4ToHex(value) : value
-            } else {
-                input.value = value
-            }
-            const valueDisplay = input.parentElement?.querySelector('.param-value')
-            if (valueDisplay) {
-                valueDisplay.textContent = this._formatValue(value)
-            }
-        }
-    }
-
-    /**
-     * Set the effect to generate controls for
-     * @param {object} effect - Effect instance with globals
+     * @param {object|null} effect - The effect being edited, or null to clear
      */
     setEffect(effect) {
         this.effect = effect
-        this.values = {}
-
-        // Initialize values - prefer ProgramState as THE source of truth
-        if (effect && effect.globals) {
-            // Get values from ProgramState if available (THE ONE SOURCE OF TRUTH)
-            const stateValues = (this.programState && this.stepKey) 
-                ? this.programState.getStepValues(this.stepKey) 
-                : {}
-            
-            for (const [name, spec] of Object.entries(effect.globals)) {
-                // Use ProgramState value if exists, otherwise fall back to defaults
-                if (stateValues[name] !== undefined) {
-                    this.values[name] = stateValues[name]
-                } else if (spec.default !== undefined) {
-                    this.values[name] = spec.default
-                } else {
-                    // Provide type-appropriate defaults
-                    this.values[name] = this._getDefaultForType(spec.type)
-                }
-            }
-        }
-
-        this.render()
+        this._sync()
     }
 
-    /**
-     * Get a sensible default value for a given type
-     * @param {string} type - The uniform type
-     * @returns {any} Default value appropriate for the type
-     * @private
-     */
-    _getDefaultForType(type) {
-        switch (type) {
-            case 'vec2':
-                return [0, 0]
-            case 'vec3':
-                return [1, 1, 1]
-            case 'vec4':
-                return [1, 1, 1, 1]
-            case 'bool':
-                return false
-            case 'int':
-                return 0
-            case 'float':
-            default:
-                return 0
-        }
-    }
-
-    /**
-     * Get current parameter values
-     * Now delegates to ProgramState when available
-     * @returns {Object<string, any>}
-     */
+    /** @returns {object} Current values for the edited effect's step */
     getValues() {
-        if (this.programState && this.stepKey) {
-            return this.programState.getStepValues(this.stepKey)
-        }
-        return { ...this.values }  // Fallback for backward compat
+        const stepKey = this.stepKey
+        if (this.programState && stepKey) return this.programState.getStepValues(stepKey)
+        return {}
     }
 
     /**
-     * Set a parameter value
-     * Now delegates to ProgramState when available
      * @param {string} name - Parameter name
      * @param {any} value - New value
      */
     setValue(name, value) {
-        // Always keep local values in sync (for rendering)
-        this.values[name] = value
-        
-        if (this.programState && this.stepKey) {
-            // Use ProgramState as THE source of truth
-            this.programState.setValue(this.stepKey, name, value)
-            // Call onChange for direct uniform updates
-            this.onChange(name, value)
-        } else {
-            // Fallback when ProgramState not available
-            this.onChange(name, value)
-            // Update UI if needed
-            this._updateControlValue(name, value)
-        }
+        const stepKey = this.stepKey
+        if (!this.programState || !stepKey) return
+        this.programState.setValue(stepKey, name, value)
+        this.onChange(name, value)
     }
 
-    /**
-     * Render the controls
-     */
-    render() {
-        if (!this.effect || !this.effect.globals) {
-            this.container.innerHTML = `
-                <div class="empty-state">Load an effect to see parameters</div>
-            `
-            this.onRender()
+    _sync() {
+        const info = this._resolveEffectInfo()
+        const def = this._resolveEffectDef(info)
+
+        if (!info || !def?.globals) {
+            this._shownSignature = null
+            this._panel.hide()
+            this._empty.hidden = false
             return
         }
 
-        const globals = this.effect.globals
-        const entries = Object.entries(globals)
-
-        if (entries.length === 0) {
-            this.container.innerHTML = `
-                <div class="empty-state">
-                    <p>No custom parameters</p>
-                    <p class="hint">Standard uniforms available: time, resolution, aspect</p>
-                </div>
-            `
-            this.onRender()
+        const signature = `${info.stepIndex}:${info.fullName}:${Object.keys(def.globals).join(',')}`
+        if (signature === this._shownSignature) {
+            // Same effect, same params: the call site may have shifted, but a
+            // rebuild here would drop focus and interrupt an in-flight drag.
+            this._panel.updateEffectInfo(info)
             return
         }
 
-        // Group by category if available
-        const groups = this._groupByCategory(entries)
+        this._shownSignature = signature
+        this._empty.hidden = true
+        if (this._enumsProvider) this._panel.enums = this._enumsProvider() || {}
+        this._panel.show({ effectInfo: info, effectDef: def })
+    }
 
-        this.container.innerHTML = ''
+    /**
+     * Locate the edited effect in the compiled chain by name.
+     *
+     * Authoring DSL is usually `effect().write(o0)`, where the edited effect is
+     * also step 0 — but any chain with a starter in front of it (the default
+     * program included) would otherwise surface the starter's params instead.
+     */
+    _resolveEffectInfo() {
+        const structure = this.programState?.getStructure?.() || []
+        if (structure.length === 0) return null
 
-        for (const [category, params] of Object.entries(groups)) {
-            if (category !== 'default') {
-                const header = document.createElement('div')
-                header.className = 'param-category'
-                header.textContent = category
-                this.container.appendChild(header)
-            }
-
-            for (const [name, spec] of params) {
-                const control = this._createControl(name, spec)
-                this.container.appendChild(control)
-            }
+        const name = this._editedEffectName()
+        if (name) {
+            // Show the edited effect specifically. If it isn't in the compiled
+            // chain, don't fall back to an unrelated step — that would surface
+            // (and edit) the wrong effect. Signal "nothing to show" instead.
+            return structure.find(e => e.name === name || e.fullName === name) || null
         }
-        
-        // Notify listener that controls were rendered
-        this.onRender()
+        // No specific effect being edited: show the program's first step.
+        return structure[0]
     }
 
-    /**
-     * Group parameters by category
-     * @private
-     */
-    _groupByCategory(entries) {
-        const groups = { default: [] }
-
-        for (const [name, spec] of entries) {
-            const category = spec.ui?.category || 'default'
-            if (!groups[category]) {
-                groups[category] = []
-            }
-            groups[category].push([name, spec])
+    _resolveEffectDef(info) {
+        if (!info) return null
+        // While authoring, definition.json runs ahead of the compiled program:
+        // a param added there should show up before the next successful compile.
+        const name = this._editedEffectName()
+        if (this.effect?.globals && (!name || info.name === name || info.fullName === name)) {
+            return this.effect
         }
-
-        return groups
+        return this.programState?.getEffectDef?.(`step_${info.stepIndex}`) || null
     }
 
-    /**
-     * Create a control element for a parameter
-     * @private
-     */
-    _createControl(name, spec) {
-        const div = document.createElement('div')
-        div.className = 'param-control'
-
-        const label = spec.ui?.label || name
-        const type = spec.type || 'float'
-        const control = spec.ui?.control
-        const value = this.values[name]
-
-        // Check for color control first (ui.control takes precedence)
-        if (control === 'color' || type === 'vec4' || type === 'vec3') {
-            div.innerHTML = this._createColorPicker(name, label, value)
-        } else if (type === 'bool') {
-            div.innerHTML = this._createCheckbox(name, label, value)
-        } else if (type === 'float' || type === 'int') {
-            div.innerHTML = this._createSlider(name, label, spec, value)
-        } else {
-            div.innerHTML = this._createSlider(name, label, spec, value)
-        }
-
-        // Add event listeners
-        const input = div.querySelector('input')
-        if (input) {
-            input.addEventListener('input', (e) => {
-                let newValue
-
-                if (e.target.type === 'checkbox') {
-                    newValue = e.target.checked
-                } else if (e.target.type === 'color') {
-                    // Convert hex color to vec3 or vec4 for shader uniforms
-                    newValue = this._hexToVec(e.target.value, type)
-                } else {
-                    newValue = parseFloat(e.target.value)
-                    if (type === 'int') {
-                        newValue = Math.round(newValue)
-                    }
-                }
-
-                // Use setValue to delegate to ProgramState when available
-                this.setValue(name, newValue)
-
-                // Update value display (setValue may not update display for non-ProgramState path)
-                const valueDisplay = div.querySelector('.param-value')
-                if (valueDisplay) {
-                    valueDisplay.textContent = this._formatValue(newValue)
-                }
-            })
-        }
-
-        return div
-    }
-
-    /**
-     * Create slider HTML
-     * @private
-     */
-    _createSlider(name, label, spec, value) {
-        const min = spec.min !== undefined ? spec.min : 0
-        const max = spec.max !== undefined ? spec.max : 1
-        const step = spec.type === 'int' ? 1 : (max - min) / 100
-
-        return `
-            <div class="param-label">
-                <span>${escapeHtml(label)}</span>
-                <span class="param-value">${escapeHtml(this._formatValue(value))}</span>
-            </div>
-            <input type="range" class="param-slider" data-param="${escapeHtml(name)}"
-                   min="${escapeHtml(min)}" max="${escapeHtml(max)}" step="${escapeHtml(step)}" value="${escapeHtml(value)}">
-        `
-    }
-
-    /**
-     * Create checkbox HTML
-     * @private
-     */
-    _createCheckbox(name, label, value) {
-        return `
-            <label class="param-checkbox">
-                <input type="checkbox" data-param="${escapeHtml(name)}" ${value ? 'checked' : ''}>
-                <span>${escapeHtml(label)}</span>
-            </label>
-        `
-    }
-
-    /**
-     * Create color picker HTML
-     * @private
-     */
-    _createColorPicker(name, label, value) {
-        // Convert vec4 to hex color
-        const hex = this._vec4ToHex(value)
-
-        return `
-            <div class="param-label">
-                <span>${escapeHtml(label)}</span>
-            </div>
-            <input type="color" class="param-color" data-param="${escapeHtml(name)}" value="${escapeHtml(hex)}">
-        `
-    }
-
-    /**
-     * Format a value for display
-     * @private
-     */
-    _formatValue(value) {
-        if (typeof value === 'boolean') {
-            return value ? 'on' : 'off'
-        }
-        if (typeof value === 'number') {
-            return value.toFixed(2)
-        }
-        if (Array.isArray(value) && value.length >= 3) {
-            // Vec4 color - show as hex
-            return this._vec4ToHex(value)
-        }
-        return String(value)
-    }
-
-    /**
-     * Convert vec4 to hex color
-     * @private
-     */
-    _vec4ToHex(vec) {
-        if (!Array.isArray(vec) || vec.length < 3) {
-            return '#ffffff'
-        }
-        const r = Math.round(vec[0] * 255).toString(16).padStart(2, '0')
-        const g = Math.round(vec[1] * 255).toString(16).padStart(2, '0')
-        const b = Math.round(vec[2] * 255).toString(16).padStart(2, '0')
-        return `#${r}${g}${b}`
-    }
-
-    /**
-     * Convert hex color to vec4
-     * @private
-     */
-    _hexToVec4(hex) {
-        const r = parseInt(hex.slice(1, 3), 16) / 255
-        const g = parseInt(hex.slice(3, 5), 16) / 255
-        const b = parseInt(hex.slice(5, 7), 16) / 255
-        return [r, g, b, 1.0]
-    }
-
-    /**
-     * Convert hex color to vec3 or vec4 based on type
-     * @private
-     */
-    _hexToVec(hex, type) {
-        const r = parseInt(hex.slice(1, 3), 16) / 255
-        const g = parseInt(hex.slice(3, 5), 16) / 255
-        const b = parseInt(hex.slice(5, 7), 16) / 255
-        return type === 'vec3' ? [r, g, b] : [r, g, b, 1.0]
+    _editedEffectName() {
+        return this.effect?.func || this.effect?.name || null
     }
 }

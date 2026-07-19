@@ -218,6 +218,32 @@ body {
     left: 16px;
 }
 
+/* Params overlay hosts <effect-controls>, which supplies its own titlebar,
+   background, border and scrolling body — so this is a bare frame.
+   Width: 566px, so the right edge lines up with the 582px menu bar
+   (16px left inset + 566 = 582). The two-up control grid needs the room, but
+   any wider and it overhangs the menu bar — and in Foundry slides under the
+   docked doc reader. 566 is also Polymorphic's own calc(590px - 0.5em - 1rem).
+   No backdrop-filter: it establishes a containing block for fixed-position
+   descendants, which breaks centering of the modal <dialog> that color-picker
+   opens. Same reason the panel itself declines one. */
+#params-overlay {
+    width: min(566px, calc(100vw - 32px));
+    max-width: none;
+    max-height: min(50%, 24rem);
+    background-color: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    overflow: visible;
+}
+
+#params-overlay-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+
 /* Overlay header */
 .overlay-header {
     display: flex;

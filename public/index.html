@@ -147,17 +147,12 @@
                 <div class="control-buttons" role="toolbar" aria-label="Controls">
                 </div>
                 
-                <!-- Params Overlay (bottom left) -->
+                <!-- Params Overlay (bottom left).
+                     No overlay-header here: <effect-controls> brings its own
+                     titlebar (namespace, effect name, help, close) and its own
+                     scrolling body. -->
                 <div id="params-overlay" class="canvas-overlay bottom-left" hidden>
-                    <div class="overlay-header">
-                        <span class="overlay-title">Parameters</span>
-                        <button class="overlay-close-btn" aria-label="Close">
-                            <span class="icon-material">close</span>
-                        </button>
-                    </div>
-                    <div id="params-overlay-content" class="overlay-content">
-                        <div class="empty-state">Load an effect to see parameters</div>
-                    </div>
+                    <div id="params-overlay-content"></div>
                 </div>
                 
                 <!-- Saved Effects Overlay (bottom left) -->
