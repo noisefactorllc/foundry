@@ -14,7 +14,7 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.14",
-    "playwright": "^1.61.1"
+    "playwright": "^1.62.0"
   },
   "engines": {
     "node": ">=18.0.0"
