@@ -1,4 +1,8 @@
-import { AboutDialog } from 'handfish'
+import { AboutDialog, initEscapeHandler } from 'handfish'
+
+// One global Escape handler for handfish components (menu bar, dialogs).
+// Required once per app by the handfish escape-stack contract.
+initEscapeHandler()
 
 const about = new AboutDialog({
     name: 'Foundry',

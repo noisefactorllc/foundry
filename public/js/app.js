@@ -8,7 +8,7 @@
 import { ShadeRenderer } from './noisemaker/index.js'
 import { preloadFontsForDsl } from './fontLoader.js'
 import { workspaceStore, saveWorkspace, loadWorkspace, registerEffectFromWorkspace } from './workspace/index.js'
-import { FileBrowser, ParamControls, SavedEffects, keyboard, toast, helpModal, aboutModal, nameDialog, CodeEditor, deleteEffectDialog, initDocReader, toggleDocReader, showDocReader, hideDocReader, showPlaceholderContent, importFromUrlDialog } from './ui/index.js'
+import { FileBrowser, ParamControls, SavedEffects, keyboard, toast, helpModal, aboutModal, nameDialog, CodeEditor, deleteEffectDialog, initDocReader, toggleDocReader, showDocReader, hideDocReader, isDocReaderVisible, showPlaceholderContent, importFromUrlDialog } from './ui/index.js'
 import { OpenEffectDialog } from './ui/open-effect-dialog.js'
 import { ImportEffectDialog } from './ui/import-effect-dialog.js'
 import { WorkspaceFilesDialog } from './ui/workspace-files-dialog.js'
@@ -58,11 +58,8 @@ function updateLoadingStatus(status) {
 }
 
 function updateMenuFilename() {
-    const menuFilenameEl = document.getElementById('menuFilename')
-    if (menuFilenameEl) {
-        // Only show filename when editor is visible
-        menuFilenameEl.textContent = canvasEditorVisible ? (canvasEditorCurrentFile || 'dsl.txt') : ''
-    }
+    // The menu bar's center label pulls filename + visibility from state.
+    refreshMenuBar()
 }
 
 function hideLoadingScreen() {
@@ -83,7 +80,6 @@ function hideLoadingScreen() {
 const canvas = document.getElementById('canvas')
 const dslEditor = document.getElementById('dsl-editor')
 const compileStatus = document.getElementById('compile-status')
-const playPauseBtn = document.getElementById('play-pause-btn')
 const durationInput = document.getElementById('duration-input')
 const fpsCounter = document.getElementById('fps-counter')
 const paramsContainer = document.getElementById('params-overlay-content')
@@ -92,7 +88,6 @@ const savedEffectsContainer = document.getElementById('saved-overlay-content')
 
 // Canvas overlay elements
 const toggleSavedOverlay = document.getElementById('toggle-saved-overlay')
-const toggleDslOverlay = document.getElementById('toggle-dsl-overlay')
 const paramsOverlay = document.getElementById('params-overlay')
 const savedOverlay = document.getElementById('saved-overlay')
 const canvasEditor = document.getElementById('canvas-editor')
@@ -100,7 +95,6 @@ const canvasEditor = document.getElementById('canvas-editor')
 const compilerErrorEl = document.getElementById('compiler-error')
 const saveEffectOverlayBtn = document.getElementById('save-effect-overlay-btn')
 const agentStatus = document.getElementById('agent-status')
-const menuFilename = document.getElementById('menuFilename')
 
 // =========================================================================
 // State
@@ -286,8 +280,7 @@ const renderer = new ShadeRenderer(canvas, {
             renderer.stop()
             isPaused = true
             pausedTime = 0
-            playPauseBtn.textContent = 'play_arrow'
-            playPauseBtn.title = 'Play'
+            refreshMenuBar()
             toast.warning('Performance pause - shader too expensive')
         }
     },
@@ -339,14 +332,6 @@ workspaceFilesDialog.onFileSelect((filePath) => {
     }
     switchEditorFile(filePath)
 })
-
-if (menuFilename) {
-    menuFilename.addEventListener('click', () => {
-        if (canvasEditorVisible) {
-            workspaceFilesDialog.open()
-        }
-    })
-}
 
 /**
  * Refresh the effect dialog with library effects + user saved effects
@@ -685,7 +670,8 @@ async function loadEffectToWorkspace(effectId, newName) {
 
 function updateOverlayToggleStates() {
     toggleSavedOverlay?.classList.toggle('active', activeBottomLeftOverlay === 'saved')
-    toggleDslOverlay?.classList.toggle('active', canvasEditorVisible)
+    // The DSL toggle lives in the menu bar; it pulls canvasEditorVisible.
+    refreshMenuBar()
 }
 
 function showBottomLeftOverlay(which) {
@@ -990,21 +976,12 @@ paramsOverlay?.addEventListener('panelclose', () => showBottomLeftOverlay(null))
 
 // Toggle button handlers
 toggleSavedOverlay?.addEventListener('click', () => showBottomLeftOverlay('saved'))
-toggleDslOverlay?.addEventListener('click', toggleCanvasEditor)
-
-// Doc reader toggle
-const docToggleBtn = document.getElementById('doc-toggle-btn')
+// Doc reader close button (the open/toggle control lives in the menu bar)
 const docReaderClose = document.querySelector('.doc-reader-close')
-
-docToggleBtn?.addEventListener('click', () => {
-    const isVisible = toggleDocReader()
-    docToggleBtn.classList.toggle('active', isVisible)
-    canvasEditor?.classList.toggle('doc-open', isVisible)
-})
 
 docReaderClose?.addEventListener('click', () => {
     hideDocReader()
-    docToggleBtn?.classList.remove('active')
+    refreshMenuBar()
     canvasEditor?.classList.remove('doc-open')
 })
 
@@ -1054,7 +1031,7 @@ async function init() {
         initDocReader()
         showPlaceholderContent()
         showDocReader()
-        docToggleBtn?.classList.add('active')
+        refreshMenuBar()
         canvasEditor?.classList.add('doc-open')
         
         updateLoadingStatus('Initializing renderer')
@@ -1317,8 +1294,8 @@ async function init() {
 
         registerKeyboardShortcuts()
         setupAboutModal()
-        setupMenuBar()
-        
+        refreshMenuBar()
+
         if (savedEffects) {
             await savedEffects.refresh()
         }
@@ -1438,237 +1415,181 @@ function setupAboutModal() {
 // Menu Bar
 // =========================================================================
 
-function setupMenuBar() {
-    const menu = document.getElementById('menu')
-    if (!menu) return
+const menuBarEl = document.getElementById('menu')
 
-    // Dropdown menu toggle
-    const menus = menu.querySelectorAll('.menu')
-    menus.forEach(menuEl => {
-        const title = menuEl.querySelector('.menu-title')
-        const items = menuEl.querySelector('.menu-items')
+function refreshMenuBar() {
+    menuBarEl?.refresh?.()
+}
 
-        if (title && items) {
-            title.addEventListener('click', (e) => {
-                e.stopPropagation()
-                // Close other menus
-                menu.querySelectorAll('.menu-items').forEach(el => {
-                    if (el !== items) el.classList.add('hide')
-                })
-                items.classList.toggle('hide')
-            })
-        }
-    })
-
-    // Close menus when clicking outside
-    document.addEventListener('click', () => {
-        menu.querySelectorAll('.menu-items').forEach(el => {
-            el.classList.add('hide')
-        })
-    })
-
-    // About menu item
-    const aboutMenuItem = document.getElementById('aboutMenuItem')
-    if (aboutMenuItem) {
-        aboutMenuItem.addEventListener('click', () => {
-            aboutModal.open()
-            menu.querySelectorAll('.menu-items').forEach(el => el.classList.add('hide'))
-        })
-    }
-
-    // Import from library menu item
-    const importFromLibraryMenuItem = document.getElementById('importFromLibraryMenuItem')
-    if (importFromLibraryMenuItem) {
-        importFromLibraryMenuItem.addEventListener('click', () => {
-            openEffectDialog.open()
-            menu.querySelectorAll('.menu-items').forEach(el => el.classList.add('hide'))
-        })
-    }
-
-    // Import from ZIP menu item
-    const importFromZipMenuItem = document.getElementById('importFromZipMenuItem')
-    if (importFromZipMenuItem) {
-        importFromZipMenuItem.addEventListener('click', () => {
-            importEffectDialog.open()
-            menu.querySelectorAll('.menu-items').forEach(el => el.classList.add('hide'))
-        })
-    }
-
-    // New effect menu item
-    const newEffectMenuItem = document.getElementById('newEffectMenuItem')
-    if (newEffectMenuItem) {
-        newEffectMenuItem.addEventListener('click', async () => {
-            menu.querySelectorAll('.menu-items').forEach(el => el.classList.add('hide'))
-            const name = await nameDialog.show({
-                title: 'New Effect',
-                label: 'Effect Name',
-                value: '',
-                placeholder: 'Enter effect name...',
-                confirmText: 'Create'
-            })
-            if (name) {
-                // Import synth.solid as the starting point under user namespace
-                await loadEffectToWorkspace('synth/solid', name)
-                await compileAndRun()
-                toast.success(`Created: ${name}`)
-            }
-        })
-    }
-
-    // New file menu item
-    const newFileMenuItem = document.getElementById('newFileMenuItem')
-    if (newFileMenuItem) {
-        newFileMenuItem.addEventListener('click', async () => {
-            menu.querySelectorAll('.menu-items').forEach(el => el.classList.add('hide'))
-            const filename = await nameDialog.show({
-                title: 'New File',
-                label: 'Filename',
-                value: '',
-                placeholder: 'e.g., glsl/helper.glsl',
-                confirmText: 'Create'
-            })
-            if (filename) {
-                // Create the file with empty content
-                workspaceStore.setFile(filename, '')
-                fileBrowser.render()
-                // Open the new file in editor
-                if (!canvasEditorVisible) {
-                    toggleCanvasEditor()
-                }
-                switchEditorFile(filename)
-                toast.success(`Created: ${filename}`)
-            }
-        })
-    }
-
-    // Workspace files menu item
-    const workspaceFilesMenuItem = document.getElementById('workspaceFilesMenuItem')
-    if (workspaceFilesMenuItem) {
-        workspaceFilesMenuItem.addEventListener('click', () => {
-            workspaceFilesDialog.open()
-            menu.querySelectorAll('.menu-items').forEach(el => el.classList.add('hide'))
-        })
-    }
-
-    // Save effect workspace menu item
-    const saveEffectMenuItem = document.getElementById('saveEffectMenuItem')
-    if (saveEffectMenuItem) {
-        saveEffectMenuItem.addEventListener('click', async () => {
-            menu.querySelectorAll('.menu-items').forEach(el => el.classList.add('hide'))
-            const name = await nameDialog.show({
-                title: 'Save Effect',
-                label: 'Effect Name',
-                value: workspaceStore.name || '',
-                placeholder: 'Enter effect name...',
-                confirmText: 'Save'
-            })
-            if (name) {
-                await savedEffects?.save(name)
-                await refreshEffectDialog()
-                toast.success(`Saved: ${name}`)
-            }
-        })
-    }
-
-    // Delete effect workspace menu item
-    const deleteEffectMenuItem = document.getElementById('deleteEffectMenuItem')
-    if (deleteEffectMenuItem) {
-        deleteEffectMenuItem.addEventListener('click', () => {
-            menu.querySelectorAll('.menu-items').forEach(el => el.classList.add('hide'))
-            deleteEffectDialog.onEffectDelete(async () => {
-                await refreshEffectDialog()
-                toast.success('Effect deleted')
-            })
-            deleteEffectDialog.open()
-        })
-    }
-
-    // Download workspace files menu item
-    const downloadWorkspaceMenuItem = document.getElementById('downloadWorkspaceMenuItem')
-    if (downloadWorkspaceMenuItem) {
-        downloadWorkspaceMenuItem.addEventListener('click', () => {
-            handleExport()
-            menu.querySelectorAll('.menu-items').forEach(el => el.classList.add('hide'))
-        })
-    }
-
-    // Show parameters menu item
-    const showParametersMenuItem = document.getElementById('showParametersMenuItem')
-    if (showParametersMenuItem) {
-        showParametersMenuItem.addEventListener('click', () => {
-            showBottomLeftOverlay('params')
-            menu.querySelectorAll('.menu-items').forEach(el => el.classList.add('hide'))
-        })
-    }
-
-    // Show DSL code menu item
-    const showDslMenuItem = document.getElementById('showDslMenuItem')
-    if (showDslMenuItem) {
-        showDslMenuItem.addEventListener('click', () => {
-            toggleCanvasEditor()
-            menu.querySelectorAll('.menu-items').forEach(el => el.classList.add('hide'))
-        })
-    }
-
-    // Edit in Noisedeck menu item
-    const editInNoisedeckMenuItem = document.getElementById('editInNoisedeckMenuItem')
-    if (editInNoisedeckMenuItem) {
-        editInNoisedeckMenuItem.addEventListener('click', () => {
-            handleEditInNoisedeck()
-            menu.querySelectorAll('.menu-items').forEach(el => el.classList.add('hide'))
-        })
-    }
-
-    // Edit in Noodles menu item
-    const editInNoodlesMenuItem = document.getElementById('editInNoodlesMenuItem')
-    if (editInNoodlesMenuItem) {
-        editInNoodlesMenuItem.addEventListener('click', () => {
-            handleEditInNoodles()
-            menu.querySelectorAll('.menu-items').forEach(el => el.classList.add('hide'))
-        })
-    }
-
-    // Edit in Shade menu item
-    const editInShadeMenuItem = document.getElementById('editInShadeMenuItem')
-    if (editInShadeMenuItem) {
-        editInShadeMenuItem.addEventListener('click', () => {
-            handleEditInShade()
-            menu.querySelectorAll('.menu-items').forEach(el => el.classList.add('hide'))
-        })
-    }
-
-    // Edit in Polymorphic menu item
-    const editInPolymorphicMenuItem = document.getElementById('editInPolymorphicMenuItem')
-    if (editInPolymorphicMenuItem) {
-        editInPolymorphicMenuItem.addEventListener('click', () => {
-            handleEditInPolymorphic()
-            menu.querySelectorAll('.menu-items').forEach(el => el.classList.add('hide'))
-        })
-    }
-
-    // Import from URL menu item
-    const importFromUrlMenuItem = document.getElementById('importFromUrlMenuItem')
-    if (importFromUrlMenuItem) {
-        importFromUrlMenuItem.addEventListener('click', () => {
-            importFromUrlDialog.open({
-                onLoad: (composition) => handleLoadFromUrl(composition).catch(err => handleError(err, ErrorType.UNKNOWN))
-            })
-            menu.querySelectorAll('.menu-items').forEach(el => el.classList.add('hide'))
-        })
-    }
-
-    // Share publicly menu item
-    const sharePubliclyMenuItem = document.getElementById('sharePubliclyMenuItem')
-    if (sharePubliclyMenuItem) {
-        sharePubliclyMenuItem.addEventListener('click', () => {
-            const dsl = canvasEditor?.value || dslEditor.value || ''
-            shareModal.open({
-                dsl,
-                canvas,
-                renderer
-            })
-            menu.querySelectorAll('.menu-items').forEach(el => el.classList.add('hide'))
-        })
+// Config for the shared handfish <menu-bar>. Handlers are the same closures
+// the old per-id listeners ran; dynamic fields are pulled on menu open,
+// after every activation, and on refreshMenuBar().
+if (menuBarEl) {
+    menuBarEl.config = {
+        ariaLabel: 'Foundry menu',
+        regions: {
+            left: [
+                {
+                    type: 'menu',
+                    id: 'logoMenu',
+                    trigger: {
+                        html: '<svg id="logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600" fill="currentColor"><g transform="translate(0,600) scale(0.1,-0.1)"><path d="M883 4443 l677 -678 672 -2 671 -1 -679 679 -679 679 -670 0 -670 0 678 -677z"/><path d="M2308 4449 c370 -368 681 -673 692 -677 10 -4 315 -6 677 -4 l658 3 -680 674 -680 674 -670 0 -670 0 673 -670z"/><path d="M3753 4440 l682 -680 650 1 c358 0 656 3 663 8 8 5 -208 227 -662 679 l-675 672 -670 0 -669 0 681 -680z"/><path d="M1660 3673 c0 -4 305 -310 678 -680 l677 -672 670 0 670 -1 -681 680 -681 680 -667 0 c-366 0 -666 -3 -666 -7z"/><path d="M3765 3000 l680 -680 670 0 670 0 -680 680 -680 680 -670 0 -670 0 680 -680z"/><path d="M3780 1555 l675 -675 671 0 672 0 -676 675 -677 675 -670 0 -670 0 675 -675z"/></g></svg>',
+                        ariaLabel: 'Foundry menu',
+                    },
+                    items: [
+                        { id: 'aboutMenuItem', label: 'about Foundry', onSelect: () => aboutModal.open() },
+                    ],
+                },
+                {
+                    type: 'menu',
+                    id: 'fileMenu',
+                    trigger: { label: 'file' },
+                    items: [
+                        {
+                            id: 'newEffectMenuItem',
+                            label: 'new effect...',
+                            onSelect: async () => {
+                                const name = await nameDialog.show({
+                                    title: 'New Effect',
+                                    label: 'Effect Name',
+                                    value: '',
+                                    placeholder: 'Enter effect name...',
+                                    confirmText: 'Create'
+                                })
+                                if (name) {
+                                    // Import synth.solid as the starting point under user namespace
+                                    await loadEffectToWorkspace('synth/solid', name)
+                                    await compileAndRun()
+                                    toast.success(`Created: ${name}`)
+                                }
+                            },
+                        },
+                        {
+                            id: 'newFileMenuItem',
+                            label: 'new file...',
+                            onSelect: async () => {
+                                const filename = await nameDialog.show({
+                                    title: 'New File',
+                                    label: 'Filename',
+                                    value: '',
+                                    placeholder: 'e.g., glsl/helper.glsl',
+                                    confirmText: 'Create'
+                                })
+                                if (filename) {
+                                    // Create the file with empty content
+                                    workspaceStore.setFile(filename, '')
+                                    fileBrowser.render()
+                                    // Open the new file in editor
+                                    if (!canvasEditorVisible) {
+                                        toggleCanvasEditor()
+                                    }
+                                    switchEditorFile(filename)
+                                    toast.success(`Created: ${filename}`)
+                                }
+                            },
+                        },
+                        { type: 'separator' },
+                        { id: 'workspaceFilesMenuItem', label: 'workspace files', onSelect: () => workspaceFilesDialog.open() },
+                        {
+                            id: 'saveEffectMenuItem',
+                            label: 'save effect workspace...',
+                            onSelect: async () => {
+                                const name = await nameDialog.show({
+                                    title: 'Save Effect',
+                                    label: 'Effect Name',
+                                    value: workspaceStore.name || '',
+                                    placeholder: 'Enter effect name...',
+                                    confirmText: 'Save'
+                                })
+                                if (name) {
+                                    await savedEffects?.save(name)
+                                    await refreshEffectDialog()
+                                    toast.success(`Saved: ${name}`)
+                                }
+                            },
+                        },
+                        {
+                            id: 'deleteEffectMenuItem',
+                            label: 'delete effect workspace...',
+                            onSelect: () => {
+                                deleteEffectDialog.onEffectDelete(async () => {
+                                    await refreshEffectDialog()
+                                    toast.success('Effect deleted')
+                                })
+                                deleteEffectDialog.open()
+                            },
+                        },
+                        { id: 'downloadWorkspaceMenuItem', label: 'export effect to zip', onSelect: () => handleExport() },
+                        { type: 'separator' },
+                        { id: 'importFromLibraryMenuItem', label: 'import effect from library...', onSelect: () => openEffectDialog.open() },
+                        { id: 'importFromZipMenuItem', label: 'import effect from zip...', onSelect: () => importEffectDialog.open() },
+                    ],
+                },
+                {
+                    type: 'menu',
+                    id: 'effectMenu',
+                    trigger: { label: 'effect' },
+                    items: [
+                        { id: 'showParametersMenuItem', label: 'show parameters', onSelect: () => showBottomLeftOverlay('params') },
+                        { id: 'showDslMenuItem', label: 'show dsl code', onSelect: () => toggleCanvasEditor() },
+                        { type: 'separator' },
+                        { id: 'editInNoisedeckMenuItem', label: 'edit in Noisedeck...', onSelect: () => handleEditInNoisedeck() },
+                        { id: 'editInNoodlesMenuItem', label: 'edit in Noodles...', onSelect: () => handleEditInNoodles() },
+                        { id: 'editInPolymorphicMenuItem', label: 'edit in Polymorphic...', onSelect: () => handleEditInPolymorphic() },
+                        { id: 'editInShadeMenuItem', label: 'edit in Shade...', onSelect: () => handleEditInShade() },
+                        { type: 'separator' },
+                        {
+                            id: 'importFromUrlMenuItem',
+                            label: 'import from url...',
+                            onSelect: () => {
+                                importFromUrlDialog.open({
+                                    onLoad: (composition) => handleLoadFromUrl(composition).catch(err => handleError(err, ErrorType.UNKNOWN))
+                                })
+                            },
+                        },
+                        {
+                            id: 'sharePubliclyMenuItem',
+                            label: 'share publicly...',
+                            onSelect: () => {
+                                const dsl = canvasEditor?.value || dslEditor.value || ''
+                                shareModal.open({
+                                    dsl,
+                                    canvas,
+                                    renderer
+                                })
+                            },
+                        },
+                    ],
+                },
+            ],
+            center: [
+                {
+                    type: 'label',
+                    id: 'menuFilename',
+                    text: () => canvasEditorVisible ? (canvasEditorCurrentFile || 'dsl.txt') : '',
+                    interactive: () => canvasEditorVisible,
+                    onSelect: () => workspaceFilesDialog.open(),
+                },
+            ],
+            right: [
+                { type: 'button', id: 'undo-btn', icon: 'undo', tooltip: 'Undo (Cmd+Z)', ariaLabel: 'Undo', disabled: () => !workspaceStore.canUndo(), onSelect: () => handleUndo() },
+                { type: 'button', id: 'redo-btn', icon: 'redo', tooltip: 'Redo (Cmd+Shift+Z)', ariaLabel: 'Redo', disabled: () => !workspaceStore.canRedo(), onSelect: () => handleRedo() },
+                {
+                    type: 'button',
+                    id: 'doc-toggle-btn',
+                    icon: 'info',
+                    tooltip: 'Documentation',
+                    ariaLabel: 'Toggle documentation',
+                    active: () => isDocReaderVisible(),
+                    onSelect: () => {
+                        const isVisible = toggleDocReader()
+                        canvasEditor?.classList.toggle('doc-open', isVisible)
+                    },
+                },
+                { type: 'button', id: 'toggle-dsl-overlay', icon: 'code', tooltip: 'Show DSL', ariaLabel: 'Toggle DSL code', active: () => canvasEditorVisible, onSelect: () => toggleCanvasEditor() },
+                { type: 'button', id: 'play-pause-btn', icon: () => isPaused ? 'play_arrow' : 'pause', tooltip: () => isPaused ? 'Play' : 'Pause', ariaLabel: 'Play/Pause', onSelect: () => togglePlayPause() },
+            ],
+        },
     }
 }
 
@@ -1722,14 +1643,11 @@ function togglePlayPause() {
     if (isPaused) {
         performancePauseGraceEnd = Date.now() + 5000
         renderer.start()
-        playPauseBtn.textContent = 'pause'
-        playPauseBtn.title = 'Pause'
     } else {
         renderer.stop()
-        playPauseBtn.textContent = 'play_arrow'
-        playPauseBtn.title = 'Play'
     }
     isPaused = !isPaused
+    refreshMenuBar()
 }
 
 function updateDuration() {
@@ -1777,9 +1695,6 @@ async function autoSwitchBackend(backend) {
 // and fire-and-forget — two in the same tick (e.g. undo+redo) must both keep the
 // guard raised until the LAST one finishes.
 let restoringHistory = 0
-
-const undoBtn = document.getElementById('undo-btn')
-const redoBtn = document.getElementById('redo-btn')
 
 /** Current effective program (params baked in via toDsl), falling back to the editor. */
 function currentProgramDsl() {
@@ -1837,8 +1752,8 @@ async function applyRestoredState(detail) {
 }
 
 function updateUndoRedoButtons() {
-    if (undoBtn) undoBtn.disabled = !workspaceStore.canUndo()
-    if (redoBtn) redoBtn.disabled = !workspaceStore.canRedo()
+    // The menu bar's undo/redo buttons pull workspaceStore.canUndo()/canRedo().
+    refreshMenuBar()
 }
 
 function handleUndo() {
@@ -2572,10 +2487,8 @@ async function handleLoadFromUrl(composition) {
 // Event Listeners
 // =========================================================================
 
-playPauseBtn.addEventListener('click', togglePlayPause)
+// play/pause, undo, and redo are menu-bar controls wired via its config
 durationInput?.addEventListener('change', updateDuration)
-undoBtn?.addEventListener('click', handleUndo)
-redoBtn?.addEventListener('click', handleRedo)
 
 // =========================================================================
 // Start

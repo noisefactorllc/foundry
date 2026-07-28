@@ -46,9 +46,9 @@
     </script>
     <link rel="stylesheet" href="https://handfish.noisefactor.io/0/styles/tokens.css">
     <link rel="stylesheet" href="https://handfish.noisefactor.io/0/styles/dialogs.css">
+    <link rel="stylesheet" href="https://handfish.noisefactor.io/0/styles/menus-and-toolbars.css">
     <link rel="stylesheet" href="css/fonts.css">
     <link rel="stylesheet" href="css/colors.css">
-    <link rel="stylesheet" href="css/menu.css">
     <link rel="stylesheet" href="css/layout.css">
     <link rel="stylesheet" href="css/editor.css">
     <link rel="stylesheet" href="css/controls.css">
@@ -78,60 +78,8 @@
     </div>
 
     <div id="app">
-        <!-- Menu Bar (at app level, like noisedeck) -->
-        <div id="menu">
-            <div id="menuBackdrop"></div>
-            <div id="menuLeft">
-                <div class="menu">
-                    <div class="menu-title">
-                        <svg id="logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600" fill="currentColor"><g transform="translate(0,600) scale(0.1,-0.1)"><path d="M883 4443 l677 -678 672 -2 671 -1 -679 679 -679 679 -670 0 -670 0 678 -677z"/><path d="M2308 4449 c370 -368 681 -673 692 -677 10 -4 315 -6 677 -4 l658 3 -680 674 -680 674 -670 0 -670 0 673 -670z"/><path d="M3753 4440 l682 -680 650 1 c358 0 656 3 663 8 8 5 -208 227 -662 679 l-675 672 -670 0 -669 0 681 -680z"/><path d="M1660 3673 c0 -4 305 -310 678 -680 l677 -672 670 0 670 -1 -681 680 -681 680 -667 0 c-366 0 -666 -3 -666 -7z"/><path d="M3765 3000 l680 -680 670 0 670 0 -680 680 -680 680 -670 0 -670 0 680 -680z"/><path d="M3780 1555 l675 -675 671 0 672 0 -676 675 -677 675 -670 0 -670 0 675 -675z"/></g></svg>
-                    </div>
-                    <div class="menu-items hide">
-                        <div id="aboutMenuItem">about Foundry</div>
-                    </div>
-                </div>
-                <div class="menu">
-                    <div class="menu-title">file</div>
-                    <div class="menu-items hide">
-                        <div id="newEffectMenuItem">new effect...</div>
-                        <div id="newFileMenuItem">new file...</div>
-                        <hr class="menu-seperator">
-                        <div id="workspaceFilesMenuItem">workspace files</div>
-                        <div id="saveEffectMenuItem">save effect workspace...</div>
-                        <div id="deleteEffectMenuItem">delete effect workspace...</div>
-                        <div id="downloadWorkspaceMenuItem">export effect to zip</div>
-                        <hr class="menu-seperator">
-                        <div id="importFromLibraryMenuItem">import effect from library...</div>
-                        <div id="importFromZipMenuItem">import effect from zip...</div>
-                    </div>
-                </div>
-                <div class="menu">
-                    <div class="menu-title">effect</div>
-                    <div class="menu-items hide">
-                        <div id="showParametersMenuItem">show parameters</div>
-                        <div id="showDslMenuItem">show dsl code</div>
-                        <hr class="menu-seperator">
-                        <div id="editInNoisedeckMenuItem">edit in Noisedeck...</div>
-                        <div id="editInNoodlesMenuItem">edit in Noodles...</div>
-                        <div id="editInPolymorphicMenuItem">edit in Polymorphic...</div>
-                        <div id="editInShadeMenuItem">edit in Shade...</div>
-                        <hr class="menu-seperator">
-                        <div id="importFromUrlMenuItem">import from url...</div>
-                        <div id="sharePubliclyMenuItem">share publicly...</div>
-                    </div>
-                </div>
-            </div>
-            <div id="menuCenter">
-                <span id="menuFilename">untitled</span>
-            </div>
-            <div id="menuRight">
-                <button id="undo-btn" class="menu-icon-btn icon-material" title="Undo (Cmd+Z)" aria-label="Undo" disabled>undo</button>
-                <button id="redo-btn" class="menu-icon-btn icon-material" title="Redo (Cmd+Shift+Z)" aria-label="Redo" disabled>redo</button>
-                <button id="doc-toggle-btn" class="menu-icon-btn icon-material" title="Documentation" aria-label="Toggle documentation">info</button>
-                <button id="toggle-dsl-overlay" class="menu-icon-btn icon-material active" title="Show DSL" aria-label="Toggle DSL code">code</button>
-                <button id="play-pause-btn" class="menu-icon-btn icon-material" title="Play/Pause (Space)" aria-label="Play/Pause">pause</button>
-            </div>
-        </div>
+        <!-- Menu Bar: shared handfish component; config assigned in js/app.js -->
+        <menu-bar id="menu" floating bar-label="Foundry menu"></menu-bar>
 
         <!-- Hidden elements for legacy compatibility -->
         <textarea id="dsl-editor" style="display:none" spellcheck="false"></textarea>
