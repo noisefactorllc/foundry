@@ -1,0 +1,280 @@
+/**
+ * Effect Workspace Menu Bar Styles
+ * Ported directly from Noisedeck
+ *
+ * The menu bar renders as the shared handfish <menu-bar> component; these are
+ * the original Foundry menu styles retargeted at the component's DOM so the
+ * bar looks exactly as it always has. Every rule that handfish's defaults
+ * would otherwise change is overridden here.
+ */
+
+:root {
+    --ui-titlebar-height: 2.25em;
+    --ui-corner-radius: 0.5rem;
+    --ui-corner-radius-small: 0.375rem;
+    --glass-blur-strength: blur(20px);
+    --effect-surface-opacity: 85%;
+    --effect-surface-transparency: 15%;
+
+    /* Chrome gradient settings (matching noisedeck) */
+    --ui-chrome-highlight-blend: 86%;
+    --ui-chrome-highlight-tint: 14%;
+    --ui-chrome-shadow-blend: 72%;
+    --ui-chrome-shadow-shade: 28%;
+
+    /* Neutral colors */
+    --color2: #141414;
+    --color6: #d0d0d0;
+    --color7: #f0f0f0;
+    --accent3: #c0c0c0;
+    --accent4: #e0e0e0;
+}
+
+/* Menu Bar Styles (was #menu; the component wraps its bar in .hf-menubar) */
+#menu .hf-menubar {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    font-weight: bold;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: calc(590px - 0.5em);
+    z-index: 2000;
+    height: var(--ui-titlebar-height);
+    align-items: stretch;
+    border-radius: 0 0 var(--ui-corner-radius) 0;
+    font-family: Nunito, 'Nunito Block';
+    font-size: 16px;
+    color: var(--color7);
+}
+
+/* was #menuBackdrop */
+#menu .hf-menubar-backdrop {
+    position: absolute;
+    inset: 0;
+    --ui-titlebar-base: color-mix(in srgb,
+            var(--color2) 65%,
+            transparent 35%);
+    --ui-titlebar-highlight: color-mix(in srgb,
+            var(--ui-titlebar-base, transparent) var(--ui-chrome-highlight-blend),
+            white var(--ui-chrome-highlight-tint));
+    --ui-titlebar-shadow: color-mix(in srgb,
+            var(--ui-titlebar-base, transparent) var(--ui-chrome-shadow-blend),
+            black var(--ui-chrome-shadow-shade));
+    --ui-titlebar-gradient: linear-gradient(180deg,
+            var(--ui-titlebar-highlight) 0%,
+            var(--ui-titlebar-base, transparent) 55%,
+            var(--ui-titlebar-shadow) 100%);
+    background: var(--ui-titlebar-gradient) var(--ui-titlebar-base);
+    opacity: 1;
+    backdrop-filter: var(--glass-blur-strength);
+    -webkit-backdrop-filter: var(--glass-blur-strength);
+    pointer-events: none;
+    z-index: -1;
+    border-radius: 0 0 var(--ui-corner-radius) 0;
+}
+
+/* was #menuLeft */
+#menu .hf-menubar-left {
+    padding-left: 0.75em;
+    padding-inline-start: 0.75em;
+    display: flex;
+    gap: 1.5em;
+    color: var(--color7);
+    align-items: center;
+    height: 100%;
+}
+
+/* was #menuCenter */
+#menu .hf-menubar-center {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    overflow: hidden;
+}
+
+#menuFilename {
+    font-size: 0.75em;
+    font-weight: 500;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    opacity: 0.8;
+    cursor: pointer;
+}
+
+#menuFilename:empty {
+    cursor: default;
+}
+
+#menuFilename:hover:not(:empty) {
+    opacity: 1;
+    color: var(--color-text);
+}
+
+/* was #menuRight */
+#menu .hf-menubar-right {
+    padding-right: 1em;
+    padding-inline-end: 1em;
+    display: flex;
+    justify-content: flex-end;
+    gap: 1em;
+    color: var(--color7);
+    align-items: center;
+    height: 100%;
+}
+
+#menu .hf-menubar span:hover {
+    color: var(--accent4);
+}
+
+/* Dropdown menu (was .menu) */
+#menu .hf-menubar-menu {
+    position: relative;
+    font-family: Nunito, 'Nunito Block';
+    font-size: 0.875em;
+    color: var(--accent3);
+    margin: 0;
+    background-color: transparent;
+    padding: 0;
+    height: 100%;
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+/* was .menu-title */
+#menu .hf-menubar-trigger {
+    position: relative;
+    top: -1px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    height: 100%;
+    padding: 0;
+    gap: 0;
+    font-size: 1em;
+    color: var(--accent3);
+}
+
+#menu .hf-menubar-trigger[aria-expanded="true"] {
+    color: var(--accent3);
+}
+
+#menu .hf-menubar-trigger:hover {
+    color: var(--accent4);
+}
+
+/* was .menu-items */
+#menu .hf-menubar-panel {
+    position: absolute;
+    background: color-mix(in srgb, var(--color2) var(--effect-surface-opacity), transparent var(--effect-surface-transparency));
+    color: var(--accent3);
+    width: max-content;
+    min-width: 200px;
+    text-wrap: nowrap;
+    z-index: 5;
+    top: calc(var(--ui-titlebar-height) + 4px);
+    left: -10px;
+    font-weight: normal;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    border-radius: var(--ui-corner-radius-small, 0.375rem);
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    backdrop-filter: var(--glass-blur-strength);
+    -webkit-backdrop-filter: var(--glass-blur-strength);
+}
+
+#menu .hf-menubar-panel::-webkit-scrollbar {
+    display: none;
+}
+
+/* was .menu-items div */
+#menu .hf-menubar-panel .hf-menu-item {
+    padding: 8px 16px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-family: Nunito, 'Nunito Block';
+    color: var(--accent3);
+    gap: 0;
+    transition: none;
+    border-radius: 0;
+    line-height: 1.5;   /* items were block divs inheriting the body line-height */
+}
+
+#menu .hf-menubar-panel .hf-menu-item:hover {
+    background-color: transparent;
+    color: var(--accent4);
+}
+
+#menu .hf-menubar-panel .hf-menu-item[aria-disabled="true"] {
+    opacity: 0.4;
+    pointer-events: none;
+}
+
+/* was .menu-seperator */
+#menu .hf-menubar-panel .hf-menu-separator {
+    border: none;
+    border-top: 1px solid color-mix(in srgb, var(--accent3) 20%, transparent 80%);
+    margin: 0.25em 0;
+    height: 0;
+    background: none;
+}
+
+#logo {
+    height: 1.5em;
+    width: 1.5em;
+    margin-right: -0.5em;
+    pointer-events: none;
+}
+
+/* Menu bar icon buttons, right side (was .menu-icon-btn) */
+#menu .hf-menubar-btn {
+    background: none;
+    border: none;
+    color: var(--accent3);
+    cursor: pointer;
+    padding: 0;
+    margin: 0;
+    line-height: 1;
+    height: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s ease;
+    opacity: 1;
+    font-size: 1em;
+}
+
+#menu .hf-menubar-btn .hf-icon {
+    color: inherit;
+    font-size: 20px;
+}
+
+#menu .hf-menubar-btn:hover {
+    color: var(--accent4);
+    opacity: 1;
+}
+
+#menu .hf-menubar-btn:hover .hf-icon {
+    color: inherit;
+}
+
+#menu .hf-menubar-btn.active {
+    color: var(--accent3);
+    opacity: 1;
+}
+
+#menu .hf-menubar-btn.active .hf-icon {
+    color: inherit;
+}
+
+#menu .hf-menubar-btn:disabled {
+    opacity: 1;
+    cursor: default;
+}

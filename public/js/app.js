@@ -101,6 +101,7 @@ const agentStatus = document.getElementById('agent-status')
 // =========================================================================
 
 let isPaused = false
+let playPauseTouched = false   // original title reads "Play/Pause (Space)" until first toggled
 let pausedTime = 0
 let currentEffect = null
 let performancePauseGraceEnd = 0
@@ -1419,6 +1420,13 @@ const menuBarEl = document.getElementById('menu')
 
 function refreshMenuBar() {
     menuBarEl?.refresh?.()
+    // Native browser tooltips, exactly as the original buttons had: mirror the
+    // component's data-title onto title (Foundry loads no tooltip layer).
+    if (menuBarEl) {
+        for (const el of menuBarEl.querySelectorAll('[data-title]')) {
+            if (el.title !== el.dataset.title) el.title = el.dataset.title
+        }
+    }
 }
 
 // Config for the shared handfish <menu-bar>. Handlers are the same closures
@@ -1587,7 +1595,7 @@ if (menuBarEl) {
                     },
                 },
                 { type: 'button', id: 'toggle-dsl-overlay', icon: 'code', tooltip: 'Show DSL', ariaLabel: 'Toggle DSL code', active: () => canvasEditorVisible, onSelect: () => toggleCanvasEditor() },
-                { type: 'button', id: 'play-pause-btn', icon: () => isPaused ? 'play_arrow' : 'pause', tooltip: () => isPaused ? 'Play' : 'Pause', ariaLabel: 'Play/Pause', onSelect: () => togglePlayPause() },
+                { type: 'button', id: 'play-pause-btn', icon: () => isPaused ? 'play_arrow' : 'pause', tooltip: () => playPauseTouched ? (isPaused ? 'Play' : 'Pause') : 'Play/Pause (Space)', ariaLabel: 'Play/Pause', onSelect: () => togglePlayPause() },
             ],
         },
     }
@@ -1640,6 +1648,7 @@ function showCompileStatus(message, type) {
 // =========================================================================
 
 function togglePlayPause() {
+    playPauseTouched = true
     if (isPaused) {
         performancePauseGraceEnd = Date.now() + 5000
         renderer.start()

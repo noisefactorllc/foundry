@@ -236,11 +236,13 @@ const ppIcon = () => page.evaluate(() => document.getElementById('play-pause-btn
 const ppTitle = () => page.evaluate(() => document.getElementById('play-pause-btn').getAttribute('data-title'))
 // Headless swiftshader can trip the app's performance auto-pause before we
 // look, so assert icon/title CONSISTENCY and a clean flip, not a fixed boot
-// state.
+// state. Until the user first toggles, the title is the original static
+// "Play/Pause (Space)" regardless of icon.
 const PP = { pause: 'Pause', play_arrow: 'Play' }
 const ppBefore = await ppIcon()
-if (PP[ppBefore] === (await ppTitle())) ok(`play-pause state consistent (${ppBefore}/${await ppTitle()})`)
-else fail(`play-pause state inconsistent: icon=${ppBefore} title=${await ppTitle()}`)
+const titleBefore = await ppTitle()
+if (titleBefore === 'Play/Pause (Space)' || PP[ppBefore] === titleBefore) ok(`play-pause boot title ok (${ppBefore}/${titleBefore})`)
+else fail(`play-pause state inconsistent: icon=${ppBefore} title=${titleBefore}`)
 await page.evaluate(() => document.getElementById('play-pause-btn').click())
 await page.waitForTimeout(150)
 const ppAfter = await ppIcon()
