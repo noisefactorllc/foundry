@@ -7,6 +7,9 @@
  * @module fontLoader
  */
 
+import { parseDsl } from './noisemaker/dslParse.js'
+import { findCalls, stringArg } from './noisemaker/dslQuery.js'
+
 const FONTS_BASE_URL = 'https://fonts.noisefactor.io'
 
 class FontLoader {
@@ -143,15 +146,12 @@ class FontLoader {
     extractFontsFromDsl(dsl) {
         const fonts = new Set()
 
-        const textCallRegex = /\.?text\s*\([^)]*\)/gi
-        const matches = dsl.match(textCallRegex) || []
-
-        for (const match of matches) {
-            const fontParamRegex = /font\s*:\s*["']([^"']+)["']/i
-            const fontMatch = match.match(fontParamRegex)
-            if (fontMatch) {
-                fonts.add(fontMatch[1])
-            }
+        // Read the font off each text effect in the parsed program. Chunking
+        // the source on `.text(...)` instead would stop at the first ')' — a
+        // close paren inside the text argument hid the font that followed it.
+        for (const call of findCalls(parseDsl(dsl), 'text')) {
+            const font = stringArg(call, 'font')
+            if (font) fonts.add(font)
         }
 
         return Array.from(fonts)
