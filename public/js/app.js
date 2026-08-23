@@ -1260,16 +1260,43 @@ async function init() {
         // `unsavedChanges` flag avoids redundant writes (a flush after the
         // debounce already saved, or a tab-switch with nothing to save).
         let unsavedChanges = false
-        // A rejected write has to leave the change pending. Clearing the flag up
-        // front and then failing drops the edit permanently: nothing retries it,
-        // and the next flush sees nothing to do.
+        let saveInFlight = false
+        let saveFailing = false      // a save failed and none has succeeded since
+        let retriedAfterFailure = false
         const saveWorkspaceNow = () => {
-            if (!unsavedChanges) return
+            // Never overlap saves. Two in flight can settle out of order, and a
+            // stale rejection would re-flag work that the later write persisted.
+            if (!unsavedChanges || saveInFlight) return
             unsavedChanges = false
-            saveWorkspace(workspaceStore).catch(err => {
-                unsavedChanges = true
-                handleError(err, ErrorType.STORAGE)
-            })
+            saveInFlight = true
+            saveWorkspace(workspaceStore)
+                .then(() => {
+                    saveFailing = false
+                    retriedAfterFailure = false
+                })
+                .catch(err => {
+                    // Leave the change pending: clearing the flag up front and
+                    // then failing drops the edit permanently.
+                    unsavedChanges = true
+                    if (!saveFailing) {
+                        // Once per failure streak — not once per tab switch,
+                        // which is every switch when storage is unavailable.
+                        saveFailing = true
+                        handleError(err, ErrorType.STORAGE)
+                    }
+                })
+                .finally(() => {
+                    saveInFlight = false
+                    if (!unsavedChanges) return
+                    if (!saveFailing) {
+                        debouncedSave()          // changes made during the write
+                    } else if (!retriedAfterFailure) {
+                        // One automatic retry. Bounded, so a permanently
+                        // unavailable IndexedDB can't spin on the timer.
+                        retriedAfterFailure = true
+                        debouncedSave()
+                    }
+                })
         }
         const debouncedSave = debounce(saveWorkspaceNow, 400)
         workspaceStore.onChange(() => {
@@ -1278,18 +1305,28 @@ async function init() {
         })
 
         // The DSL editor persists to localStorage on its own, slower timer.
-        // Hold the pending value so the flush below covers it too — otherwise
+        // Track it as pending so the flush below covers it too — otherwise
         // closing the tab mid-edit loses the last thing typed, while the
         // workspace beside it is saved.
-        let pendingUIState = null
+        //
+        // Pending is a flag, not a snapshot: dslEditor.value is also assigned
+        // programmatically (undo, opening an effect) without an input event, so
+        // a value captured at keystroke time would go stale and overwrite the
+        // newer content. Read the editor at save time.
+        let uiStateDirty = false
         let uiStateTimeout = null
         const saveUIStateNow = () => {
-            if (!pendingUIState) return
-            const state = pendingUIState
-            pendingUIState = null
+            if (!uiStateDirty || !dslEditor) return
             clearTimeout(uiStateTimeout)
             uiStateTimeout = null
-            saveUIState(state)
+            uiStateDirty = false
+            // saveUIState reports a refused write (quota, storage off) by
+            // returning false rather than throwing. Keep it pending so the next
+            // flush retries, instead of dropping the edit the way the workspace
+            // path used to.
+            if (saveUIState({ dsl: dslEditor.value }) === false) {
+                uiStateDirty = true
+            }
         }
 
         // Durability: flush every pending save immediately when the tab is
@@ -1297,8 +1334,13 @@ async function init() {
         // frozen. Failures are surfaced, not swallowed — a silently dropped
         // final write is exactly how work goes missing.
         const flushSave = () => {
-            saveUIStateNow()
-            saveWorkspaceNow()
+            try {
+                saveUIStateNow()
+            } finally {
+                // The workspace flush must run even if the editor-state write
+                // throws; it holds the larger body of work.
+                saveWorkspaceNow()
+            }
         }
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'hidden') flushSave()
@@ -1306,7 +1348,7 @@ async function init() {
         window.addEventListener('pagehide', flushSave)
 
         dslEditor?.addEventListener('input', () => {
-            pendingUIState = { dsl: dslEditor.value }
+            uiStateDirty = true
             clearTimeout(uiStateTimeout)
             uiStateTimeout = setTimeout(saveUIStateNow, 1000)
             if (canvasEditorVisible && canvasEditor && canvasEditorCurrentFile === 'dsl.txt') {

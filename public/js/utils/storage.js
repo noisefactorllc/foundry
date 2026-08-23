@@ -235,11 +235,17 @@ export function addRecentEffect(id, name) {
 
 /**
  * Save UI state
+ *
+ * Returns whether the write landed. `storage.set` reports a refusal
+ * (QuotaExceededError, storage disabled) by returning false rather than
+ * throwing, so a caller that discards this loses the state silently.
+ *
  * @param {Partial<UIState>} state
+ * @returns {boolean} Whether the state was persisted
  */
 export function saveUIState(state) {
     const current = storage.get(StorageKey.UI_STATE, {})
-    storage.set(StorageKey.UI_STATE, { ...current, ...state })
+    return storage.set(StorageKey.UI_STATE, { ...current, ...state })
 }
 
 /**
