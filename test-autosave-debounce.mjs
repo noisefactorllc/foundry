@@ -68,6 +68,60 @@ const flushed = await page.evaluate(async () => {
 if (flushed >= 1) ok('hiding the tab flushes a pending save immediately')
 else fail('pending save was NOT flushed on tab hide (durability gap)')
 
+// 4) The DSL editor's own autosave (ui_state.dsl in localStorage) must get the
+//    same flush guarantee as the workspace. It runs on a slower timer, so
+//    without a flush the last edits are lost when the tab closes.
+console.log('Flush of the editor UI state on tab hide')
+const uiFlushed = await page.evaluate(async () => {
+    const editor = document.getElementById('dsl-editor')
+    if (!editor) return { skipped: true }
+    localStorage.removeItem('shade:ui_state')
+    const typed = 'osc(freq: 42) // durability probe'
+    editor.value = typed
+    editor.dispatchEvent(new Event('input', { bubbles: true }))
+    await new Promise(r => setTimeout(r, 50))   // well inside the save timer
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' })
+    document.dispatchEvent(new Event('visibilitychange'))
+    await new Promise(r => setTimeout(r, 150))  // still inside the save timer
+    const raw = localStorage.getItem('shade:ui_state')
+    return { stored: raw ? (JSON.parse(raw).dsl || '') : '', typed }
+})
+if (uiFlushed.skipped) fail('no #dsl-editor in the page — cannot verify UI-state durability')
+else if (uiFlushed.stored === uiFlushed.typed) ok('hiding the tab flushes the pending editor state')
+else fail(`editor state was NOT flushed on tab hide (stored ${JSON.stringify(uiFlushed.stored)})`)
+
+// 5) A save that fails must not drop the change. The dirty flag is cleared
+//    before the write resolves, so a rejected write used to lose the edit
+//    permanently — nothing retried it and nothing reported it.
+console.log('A failed save is retried, not dropped')
+const retried = await page.evaluate(async () => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' })
+    document.dispatchEvent(new Event('visibilitychange'))
+
+    const realPut = IDBObjectStore.prototype.put
+    let failNext = true
+    IDBObjectStore.prototype.put = function (...args) {
+        if (this.name === 'workspaces' && failNext) {
+            failNext = false
+            throw new DOMException('forced failure', 'DataCloneError')
+        }
+        return realPut.apply(this, args)
+    }
+    try {
+        window.effectWorkspace.workspaceStore.setFile('probe-fail', 'v1')
+        await new Promise(r => setTimeout(r, 700))  // debounce fires; that write fails
+        window.__wsPuts = 0
+        Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' })
+        document.dispatchEvent(new Event('visibilitychange'))
+        await new Promise(r => setTimeout(r, 250))
+        return window.__wsPuts
+    } finally {
+        IDBObjectStore.prototype.put = realPut
+    }
+})
+if (retried >= 1) ok('a change whose save failed is still pending and gets retried')
+else fail('a failed save silently dropped the change (no retry on the next flush)')
+
 await browser.close()
 console.log(failures === 0 ? '\nAll autosave-debounce checks passed' : `\n${failures} check(s) failed`)
 process.exit(failures === 0 ? 0 : 1)

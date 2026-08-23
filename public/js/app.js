@@ -1260,34 +1260,55 @@ async function init() {
         // `unsavedChanges` flag avoids redundant writes (a flush after the
         // debounce already saved, or a tab-switch with nothing to save).
         let unsavedChanges = false
-        const debouncedSave = debounce(() => {
+        // A rejected write has to leave the change pending. Clearing the flag up
+        // front and then failing drops the edit permanently: nothing retries it,
+        // and the next flush sees nothing to do.
+        const saveWorkspaceNow = () => {
             if (!unsavedChanges) return
             unsavedChanges = false
-            saveWorkspace(workspaceStore).catch(err => handleError(err, ErrorType.STORAGE))
-        }, 400)
+            saveWorkspace(workspaceStore).catch(err => {
+                unsavedChanges = true
+                handleError(err, ErrorType.STORAGE)
+            })
+        }
+        const debouncedSave = debounce(saveWorkspaceNow, 400)
         workspaceStore.onChange(() => {
             unsavedChanges = true
             debouncedSave()
         })
 
-        // Durability: flush a pending save immediately when the tab is hidden or
-        // unloaded, since the debounce timer may not fire if the page is frozen.
+        // The DSL editor persists to localStorage on its own, slower timer.
+        // Hold the pending value so the flush below covers it too — otherwise
+        // closing the tab mid-edit loses the last thing typed, while the
+        // workspace beside it is saved.
+        let pendingUIState = null
+        let uiStateTimeout = null
+        const saveUIStateNow = () => {
+            if (!pendingUIState) return
+            const state = pendingUIState
+            pendingUIState = null
+            clearTimeout(uiStateTimeout)
+            uiStateTimeout = null
+            saveUIState(state)
+        }
+
+        // Durability: flush every pending save immediately when the tab is
+        // hidden or unloaded, since the timers may not fire if the page is
+        // frozen. Failures are surfaced, not swallowed — a silently dropped
+        // final write is exactly how work goes missing.
         const flushSave = () => {
-            if (!unsavedChanges) return
-            unsavedChanges = false
-            saveWorkspace(workspaceStore).catch(() => {})
+            saveUIStateNow()
+            saveWorkspaceNow()
         }
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'hidden') flushSave()
         })
         window.addEventListener('pagehide', flushSave)
 
-        let saveTimeout = null
         dslEditor?.addEventListener('input', () => {
-            clearTimeout(saveTimeout)
-            saveTimeout = setTimeout(() => {
-                saveUIState({ dsl: dslEditor.value })
-            }, 1000)
+            pendingUIState = { dsl: dslEditor.value }
+            clearTimeout(uiStateTimeout)
+            uiStateTimeout = setTimeout(saveUIStateNow, 1000)
             if (canvasEditorVisible && canvasEditor && canvasEditorCurrentFile === 'dsl.txt') {
                 canvasEditor.value = dslEditor.value
             }
