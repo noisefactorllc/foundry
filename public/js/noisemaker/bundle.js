@@ -36,6 +36,7 @@ export const CanvasRenderer = bundle.CanvasRenderer
 export const Effect = bundle.Effect
 export const ProgramState = bundle.ProgramState
 export const registerEffect = bundle.registerEffect
+export const unregisterEffect = bundle.unregisterEffect
 export const getEffect = bundle.getEffect
 export const getAllEffects = bundle.getAllEffects
 export const registerOp = bundle.registerOp

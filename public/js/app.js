@@ -7,7 +7,7 @@
 
 import { ShadeRenderer } from './noisemaker/index.js'
 import { preloadFontsForDsl } from './fontLoader.js'
-import { workspaceStore, saveWorkspace, loadWorkspace, registerEffectFromWorkspace } from './workspace/index.js'
+import { workspaceStore, saveWorkspace, loadWorkspace, registerEffectFromWorkspace, writePortableEffectToWorkspace } from './workspace/index.js'
 import { FileBrowser, ParamControls, SavedEffects, keyboard, toast, helpModal, aboutModal, nameDialog, CodeEditor, deleteEffectDialog, initDocReader, toggleDocReader, showDocReader, hideDocReader, isDocReaderVisible, showPlaceholderContent, importFromUrlDialog } from './ui/index.js'
 import { OpenEffectDialog } from './ui/open-effect-dialog.js'
 import { ImportEffectDialog } from './ui/import-effect-dialog.js'
@@ -489,6 +489,30 @@ function convertDefinitionJsToJson(jsContent, fallbackName) {
 // Effect Loading
 // =========================================================================
 
+/** Rename exact DSL call identifiers while preserving comments and string values. */
+function renameEffectCalls(source, originalName, newName) {
+    // Keep strings and comments whole so apparent calls inside them stay literal.
+    const tokens = Array.from(source.matchAll(/"""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|\/\/[^\n]*|\/\*[\s\S]*?\*\/|[A-Za-z_]\w*|[^\s]/g))
+        .filter(token => !token[0].startsWith('//') && !token[0].startsWith('/*'))
+    let renamed = source
+    for (let i = tokens.length - 2; i >= 0; i--) {
+        if (tokens[i][0] === originalName && tokens[i + 1][0] === '(') {
+            const start = tokens[i].index
+            renamed = renamed.slice(0, start) + newName + renamed.slice(start + originalName.length)
+        }
+    }
+    return renamed
+}
+
+/** Resolve imported effects from the workspace before their library originals. */
+function useWorkspaceNamespace(source) {
+    return source.replace(/^search[ \t]+([^\r\n]+)/m, (_, search) => {
+        const namespaces = search.split(',').map(namespace => namespace.trim())
+            .filter(namespace => namespace !== 'user')
+        return `search ${['user', ...namespaces].join(', ')}`
+    })
+}
+
 async function loadEffectToWorkspace(effectId, newName) {
     try {
         const effect = await renderer.loadEffect(effectId)
@@ -528,7 +552,11 @@ async function loadEffectToWorkspace(effectId, newName) {
             hasTex: hasTex,
             // 3D effect properties
             outputTex3d: instance.outputTex3d || null,
-            outputGeo: instance.outputGeo || null
+            outputGeo: instance.outputGeo || null,
+            uniformLayout: instance.uniformLayout,
+            uniformLayouts: instance.uniformLayouts,
+            defaultProgram: instance.defaultProgram,
+            paramAliases: instance.paramAliases
         }
 
         // For simple single-pass effects, rename the program to match the new effect name
@@ -547,6 +575,19 @@ async function loadEffectToWorkspace(effectId, newName) {
                 }
                 return newPass
             })
+        }
+
+        // Keep per-program buffer layouts aligned with renamed shader files.
+        if (definitionMeta.uniformLayouts) {
+            definitionMeta.uniformLayouts = Object.fromEntries(
+                Object.entries(definitionMeta.uniformLayouts).map(([program, layout]) =>
+                    [programRenameMap[program] || program, layout]))
+        }
+        if (definitionMeta.defaultProgram && originalFunc && name !== originalFunc) {
+            definitionMeta.defaultProgram = renameEffectCalls(definitionMeta.defaultProgram, originalFunc, name)
+        }
+        if (definitionMeta.defaultProgram) {
+            definitionMeta.defaultProgram = useWorkspaceNamespace(definitionMeta.defaultProgram)
         }
 
         workspaceStore.setFile('definition.json', JSON.stringify(definitionMeta, null, 2))
@@ -582,18 +623,9 @@ async function loadEffectToWorkspace(effectId, newName) {
         if (dsl) {
             // Replace original effect func name with the new name
             if (newName && originalFunc && newName !== originalFunc) {
-                dsl = dsl.replaceAll(originalFunc, newName)
+                dsl = renameEffectCalls(dsl, originalFunc, newName)
             }
-            // Add 'user' to the search directive while preserving original namespaces
-            const searchMatch = dsl.match(/^search\s+(.+)$/m)
-            if (searchMatch) {
-                const namespaces = searchMatch[1].split(',').map(s => s.trim())
-                if (!namespaces.includes('user')) {
-                    // Add 'user' to the beginning of the search directive
-                    const newSearch = `search user, ${namespaces.join(', ')}`
-                    dsl = dsl.replace(/^search\s+.+$/m, newSearch)
-                }
-            }
+            dsl = useWorkspaceNamespace(dsl)
             // Save DSL to workspace
             workspaceStore.setFile('dsl.txt', dsl)
             dslEditor.value = dsl
@@ -1133,35 +1165,8 @@ async function init() {
                     workspaceStore.clear()
                     workspaceStore.name = effectData.name || 'Shared Effect'
                     
-                    // Create definition.json from effect data
-                    const definition = {
-                        name: effectData.name,
-                        func: effectData.func || effectData.name,
-                        namespace: effectData.namespace || 'synth',
-                        author: effectData.author || '',
-                        description: effectData.description || '',
-                        globals: effectData.globals || {},
-                        passes: effectData.passes || []
-                    }
-                    workspaceStore.setFile('definition.json', JSON.stringify(definition, null, 2))
-                    
-                    // Extract shader files from the shaders object
-                    if (effectData.shaders) {
-                        for (const [programName, programShaders] of Object.entries(effectData.shaders)) {
-                            if (programShaders.glsl) {
-                                workspaceStore.setFile(`glsl/${programName}.glsl`, programShaders.glsl)
-                            }
-                            if (programShaders.wgsl) {
-                                workspaceStore.setFile(`wgsl/${programName}.wgsl`, programShaders.wgsl)
-                            }
-                        }
-                    }
-                    
-                    // Add help.md if present
-                    if (effectData.help) {
-                        workspaceStore.setFile('help.md', effectData.help)
-                    }
-                    
+                    writePortableEffectToWorkspace(effectData)
+
                     // Checkpoint the initial state
                     workspaceStore.checkpoint('Loaded from share')
                     
@@ -2493,35 +2498,8 @@ async function handleLoadFromUrl(composition) {
         workspaceStore.clear()
         workspaceStore.name = effectData.name || 'Imported Effect'
         
-        // Create definition.json from effect data
-        const definition = {
-            name: effectData.name,
-            func: effectData.func || effectData.name,
-            namespace: effectData.namespace || 'synth',
-            author: effectData.author || '',
-            description: effectData.description || '',
-            globals: effectData.globals || {},
-            passes: effectData.passes || []
-        }
-        workspaceStore.setFile('definition.json', JSON.stringify(definition, null, 2))
-        
-        // Extract shader files from the shaders object
-        if (effectData.shaders) {
-            for (const [programName, programShaders] of Object.entries(effectData.shaders)) {
-                if (programShaders.glsl) {
-                    workspaceStore.setFile(`glsl/${programName}.glsl`, programShaders.glsl)
-                }
-                if (programShaders.wgsl) {
-                    workspaceStore.setFile(`wgsl/${programName}.wgsl`, programShaders.wgsl)
-                }
-            }
-        }
-        
-        // Add help.md if present
-        if (effectData.help) {
-            workspaceStore.setFile('help.md', effectData.help)
-        }
-        
+        writePortableEffectToWorkspace(effectData)
+
         // Checkpoint the initial state
         workspaceStore.checkpoint('Imported from URL')
         

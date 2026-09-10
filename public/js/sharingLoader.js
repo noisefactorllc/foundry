@@ -9,8 +9,8 @@
 
 import {
     Effect,
-    registerEffect,
-    registerOp,
+    CanvasRenderer,
+    getEffect, registerEffect, unregisterEffect,
     registerStarterOps,
     mergeIntoEnums
 } from './noisemaker/bundle.js'
@@ -45,7 +45,6 @@ export function registerPortableEffect(effectData) {
     const {
         name,
         func,
-        namespace = 'user',
         description = '',
         tags = ['user'],
         globals = {},
@@ -53,6 +52,7 @@ export function registerPortableEffect(effectData) {
         shaders = {}
     } = effectData
 
+    const namespace = 'user'
     const effectFunc = func || name
 
     // Construct a real Effect instance so lifecycle hooks (asyncInit, onInit,
@@ -66,12 +66,20 @@ export function registerPortableEffect(effectData) {
         description,
         tags,
         globals,
-        passes
+        passes,
+        textures: effectData.textures,
+        outputTex3d: effectData.outputTex3d,
+        outputGeo: effectData.outputGeo,
+        uniformLayout: effectData.uniformLayout,
+        uniformLayouts: effectData.uniformLayouts,
+        defaultProgram: effectData.defaultProgram,
+        paramAliases: effectData.paramAliases,
     })
     instance.shaders = shaders
 
     // Determine if this is a starter effect (no pipeline inputs)
-    const isStarter = checkIsStarter(instance)
+    const isStarter = effectData.starter ?? checkIsStarter(instance)
+    instance.starter = isStarter
 
     // Build effect wrapper
     const effect = {
@@ -90,25 +98,23 @@ export function registerPortableEffect(effectData) {
     // Build the full effect key (namespace.func)
     const fullEffectKey = `${namespace}.${effect.func}`
 
-    // Register the instance - ONLY with namespace-qualified keys to avoid
-    // overwriting built-in effects (e.g., classicNoisedeck.pattern)
-    registerEffect(fullEffectKey, instance)
-    registerEffect(effect.id, instance)
-
-    // Register as DSL operator
-    const opSpec = {
-        name: effect.func,
-        args: buildOpArgs(instance, namespace)
+    // Canonical registration includes parameter aliases and choice enum names.
+    // Keep Foundry's namespace-only registry contract for custom effects.
+    const bareEffect = getEffect(effectFunc)
+    let choicesToRegister
+    try {
+        choicesToRegister = CanvasRenderer.prototype.registerEffectWithRuntime(effect)
+    } finally {
+        if (bareEffect !== undefined) registerEffect(effectFunc, bareEffect)
+        else unregisterEffect(effectFunc)
     }
-    registerOp(fullEffectKey, opSpec)
 
     if (isStarter) {
         registerStarterOps([fullEffectKey])
     }
 
     // Register any choice enums
-    const choicesToRegister = buildChoiceEnums(instance, namespace)
-    if (Object.keys(choicesToRegister).length > 0) {
+    if (choicesToRegister && Object.keys(choicesToRegister).length > 0) {
         mergeIntoEnums(choicesToRegister)
     }
 
@@ -125,7 +131,7 @@ function checkIsStarter(instance) {
     if (passes.length === 0) return true
 
     const pipelineInputs = [
-        'inputTex', 'inputTex3d', 'src',
+        'inputTex', 'inputTex3d', 'inputGeo', 'src',
         'o0', 'o1', 'o2', 'o3', 'o4', 'o5', 'o6', 'o7'
     ]
 
@@ -138,74 +144,6 @@ function checkIsStarter(instance) {
     }
 
     return true
-}
-
-/**
- * Build operator args from effect globals
- * @private
- */
-function buildOpArgs(instance, namespace) {
-    const args = []
-    const globals = instance.globals || {}
-
-    for (const [paramName, paramDef] of Object.entries(globals)) {
-        const arg = {
-            name: paramName,
-            type: paramDef.type || 'Number'
-        }
-
-        // Handle enum/choice parameters
-        if (paramDef.choices) {
-            arg.type = 'Enum'
-            arg.enum = `${namespace}.${instance.func}.${paramName}`
-        } else if (paramDef.enum || paramDef.enumPath) {
-            arg.type = 'Enum'
-            arg.enum = paramDef.enum || paramDef.enumPath
-        }
-
-        // Add default value
-        if (paramDef.default !== undefined) {
-            arg.default = paramDef.default
-        }
-
-        args.push(arg)
-    }
-
-    return args
-}
-
-/**
- * Build choice enums from effect definition
- * @private
- */
-function buildChoiceEnums(instance, namespace) {
-    const enums = {}
-    const globals = instance.globals || {}
-
-    for (const [paramName, paramDef] of Object.entries(globals)) {
-        if (!paramDef.choices) continue
-
-        // Skip if enum already specified
-        if (paramDef.enum || paramDef.enumPath) continue
-
-        const enumPath = `${namespace}.${instance.func}.${paramName}`
-        
-        if (!enums[namespace]) enums[namespace] = {}
-        if (!enums[namespace][instance.func]) enums[namespace][instance.func] = {}
-        enums[namespace][instance.func][paramName] = {}
-
-        for (const [choiceName, choiceValue] of Object.entries(paramDef.choices)) {
-            // Skip documentation entries (end with ":")
-            if (choiceName.endsWith(':')) continue
-            
-            enums[namespace][instance.func][paramName][choiceName] = {
-                type: 'Number',
-                value: choiceValue
-            }
-        }
-    }
-
-    return enums
 }
 
 /**

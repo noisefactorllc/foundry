@@ -13,7 +13,7 @@ export {
     isIndexedDBAvailable
 } from './workspace-db.js'
 
-import { registerEffect, registerOp, registerStarterOps } from '../noisemaker/bundle.js'
+import { Effect, CanvasRenderer, getEffect, registerEffect, unregisterEffect, registerStarterOps, mergeIntoEnums } from '../noisemaker/bundle.js'
 import { workspaceStore } from './workspace-store.js'
 
 /**
@@ -83,47 +83,8 @@ export function registerEffectFromWorkspace(renderer = null, dslOverride = null)
             return false
         }
 
-        // Build args array from globals in noisemaker's expected format
-        const args = Object.entries(globals).map(([uname, udef]) => ({
-            name: uname,
-            type: udef.type === 'vec4' ? 'color' : (udef.type || 'float'),
-            default: udef.default ?? 0,
-            min: udef.min,
-            max: udef.max,
-            uniform: udef.uniform || uname
-        }))
-
-        // Use 'user' namespace for workspace effects
         const namespace = 'user'
-
-        // Register as an op in the user namespace
         const opName = `${namespace}.${name}`
-        const opSpec = {
-            name: name,
-            args: args
-        }
-        
-        // Register the op
-        registerOp(opName, opSpec)
-        
-        // Detect if effect is used as a starter in DSL
-        // An effect is a starter if it appears at the beginning of a chain (not chained from something else)
-        let isStarter = def.starter === true
-        
-        // Check DSL to see if effect is actually used as a starter
-        const dsl = dslOverride || workspaceStore.getFile('dsl.txt')
-        if (dsl && !isStarter) {
-            // Look for the effect name at the start of a line (not chained with .)
-            // Pattern: effectname() at start of line, possibly with namespace prefix
-            const effectPattern = new RegExp(`^\\s*(${name}|${namespace}\\.${name}|${namespace}/${name})\\s*\\(`, 'm')
-            if (effectPattern.test(dsl)) {
-                isStarter = true
-            }
-        }
-        
-        if (isStarter) {
-            registerStarterOps([opName])
-        }
 
         // Determine passes - use stored passes from definition if available,
         // otherwise create correct pass structure based on effect type
@@ -160,7 +121,7 @@ export function registerEffectFromWorkspace(renderer = null, dslOverride = null)
         }
 
         // Create effect definition using 'user' namespace
-        const effectDef = {
+        const effectDef = new Effect({
             name: name,
             namespace: namespace,
             func: name,
@@ -171,16 +132,36 @@ export function registerEffectFromWorkspace(renderer = null, dslOverride = null)
             passes,
             shaders,
             textures: def.textures || {},
-            asyncInit: async () => {},
             // 3D effect properties
             outputTex3d: def.outputTex3d || null,
-            outputGeo: def.outputGeo || null
-        }
+            outputGeo: def.outputGeo || null,
+            uniformLayout: def.uniformLayout,
+            uniformLayouts: def.uniformLayouts,
+            defaultProgram: def.defaultProgram,
+            paramAliases: def.paramAliases
+        })
 
-        // Register the effect with the global registry under namespace-qualified keys only
-        // Do NOT register by just function name to avoid overwriting built-in effects
-        registerEffect(opName, effectDef)
-        registerEffect(`${namespace}/${name}`, effectDef)
+        const pipelineInputs = ['inputTex', 'inputTex3d', 'inputGeo', 'src',
+            'o0', 'o1', 'o2', 'o3', 'o4', 'o5', 'o6', 'o7']
+        const isStarter = def.starter ?? !passes.some(pass =>
+            Object.values(pass.inputs || {}).some(input => pipelineInputs.includes(input)))
+        effectDef.starter = isStarter
+        effectDef.shaders = shaders
+
+        // Canonical registration includes parameter aliases and choice enum names.
+        // Keep Foundry's namespace-only registry contract for custom effects.
+        const bareEffect = getEffect(name)
+        let choices
+        try {
+            choices = CanvasRenderer.prototype.registerEffectWithRuntime({
+                namespace, name, instance: effectDef
+            })
+        } finally {
+            if (bareEffect !== undefined) registerEffect(name, bareEffect)
+            else unregisterEffect(name)
+        }
+        if (isStarter) registerStarterOps([opName])
+        if (choices && Object.keys(choices).length) mergeIntoEnums(choices)
 
         // Also register with the renderer's loaded effects cache if provided
         // This is critical for compile() to find the effect without trying to load from bundles
@@ -194,4 +175,32 @@ export function registerEffectFromWorkspace(renderer = null, dslOverride = null)
         console.error('[Workspace] definition.json content:', defJson)
         return false
     }
+}
+
+/** Write a Portable effect's definition and sources to the current workspace. */
+export function writePortableEffectToWorkspace(effectData) {
+    const definition = {
+        name: effectData.name,
+        func: effectData.func || effectData.name,
+        namespace: 'user',
+        author: effectData.author || '',
+        description: effectData.description || '',
+        tags: effectData.tags || [],
+        globals: effectData.globals || {},
+        passes: effectData.passes || [],
+        textures: effectData.textures,
+        outputTex3d: effectData.outputTex3d,
+        outputGeo: effectData.outputGeo,
+        uniformLayout: effectData.uniformLayout,
+        uniformLayouts: effectData.uniformLayouts,
+        defaultProgram: effectData.defaultProgram,
+        paramAliases: effectData.paramAliases,
+        starter: effectData.starter
+    }
+    workspaceStore.setFile('definition.json', JSON.stringify(definition, null, 2))
+    for (const [program, shaders] of Object.entries(effectData.shaders || {})) {
+        if (shaders.glsl) workspaceStore.setFile(`glsl/${program}.glsl`, shaders.glsl)
+        if (shaders.wgsl) workspaceStore.setFile(`wgsl/${program}.wgsl`, shaders.wgsl)
+    }
+    if (effectData.help) workspaceStore.setFile('help.md', effectData.help)
 }
