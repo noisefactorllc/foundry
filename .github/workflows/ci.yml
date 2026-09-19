@@ -2,8 +2,32 @@ name: ci
 
 on:
   pull_request:
+    paths:
+      - '**'
+      - '!*.md'
+      - '!*.rst'
+      - '!*.adoc'
+      - '!docs/**'
+      - '!LICENSE*'
+      - '!.github/ISSUE_TEMPLATE/**'
+      - '!.github/PULL_REQUEST_TEMPLATE*'
+      - '!.github/dependabot.yml'
+      - '!.github/dependabot.yaml'
+      - '!.editorconfig'
   push:
     branches: [main, preview]
+    paths:
+      - '**'
+      - '!*.md'
+      - '!*.rst'
+      - '!*.adoc'
+      - '!docs/**'
+      - '!LICENSE*'
+      - '!.github/ISSUE_TEMPLATE/**'
+      - '!.github/PULL_REQUEST_TEMPLATE*'
+      - '!.github/dependabot.yml'
+      - '!.github/dependabot.yaml'
+      - '!.editorconfig'
 
 permissions:
   contents: read
