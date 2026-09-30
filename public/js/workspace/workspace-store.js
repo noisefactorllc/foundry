@@ -56,6 +56,24 @@ export class WorkspaceStore extends EventTarget {
     // File Operations
     // =========================================================================
 
+    /** Image assets use the same file, history, IndexedDB, and ZIP lifecycle as the DSL. */
+    get images() {
+        const content = this.getFile('images.json')
+        if (!content) return []
+        const images = JSON.parse(content)
+        if (!Array.isArray(images)) throw new Error('Invalid workspace images')
+        return images
+    }
+
+    set images(images) {
+        if (!images.length) {
+            this.deleteFile('images.json')
+            return
+        }
+        const content = JSON.stringify(images)
+        if (content !== this.getFile('images.json')) this.setFile('images.json', content)
+    }
+
     /**
      * Get file content
      * @param {string} path - File path

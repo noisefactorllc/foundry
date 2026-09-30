@@ -170,6 +170,7 @@ export async function loadFromCode(code) {
 
     return {
         dsl: composition.dsl,
+        images: composition.images || [],
         title: composition.title || '',
         description: composition.description || '',
         effects: registeredEffects,

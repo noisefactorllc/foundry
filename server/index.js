@@ -24,7 +24,7 @@ const HOST = process.env.HOST || '127.0.0.1';
 function cspMiddleware(req, res, next) {
     const csp = [
         "default-src 'self'",
-        "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdnjs.cloudflare.com https://shaders.noisedeck.app https://handfish.noisefactor.io",
+        "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdnjs.cloudflare.com https://shaders.noisedeck.app https://handfish.noisefactor.io https://sharing.noisedeck.app",
         "style-src 'self' 'unsafe-inline' https://handfish.noisefactor.io",
         "img-src 'self' data: blob:",
         "font-src 'self' data: https://fonts.noisefactor.io",

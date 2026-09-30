@@ -67,6 +67,9 @@ export class ShadeRenderer {
         // State
         this._initialized = false
         this._currentDsl = '' // The ONE canonical DSL source
+        this.images = []
+        this._imageTools = null
+        this._imageDimensions = []
         this._lastGoodDsl = '' // Last successfully compiled DSL (for recovery)
         this._hasCorruptedState = false // Flag to force fresh pipeline on next compile
         this._textCanvases = new Map() // Track text canvases for text effects
@@ -75,6 +78,13 @@ export class ShadeRenderer {
 
         // Create ProgramState - renderer is set in init() after CanvasRenderer is ready
         this._programState = new ProgramState()
+        this._programState.on('change', () => this._applyImageDimensions())
+        this._programState.on('stepchange', () => this._applyImageDimensions())
+        const toDsl = this._programState.toDsl.bind(this._programState)
+        this._programState.toDsl = (...args) => {
+            const dsl = toDsl(...args)
+            return this._imageTools ? this._imageTools.restoreMediaUrls(this._currentDsl, dsl) : dsl
+        }
     }
 
     // =========================================================================
@@ -90,6 +100,26 @@ export class ShadeRenderer {
     /** @returns {ProgramState} Program state manager */
     get programState() {
         return this._programState
+    }
+
+    _applyImageDimensions() {
+        if (this._applyingImageDimensions || !this._imageDimensions.length) return
+        this._applyingImageDimensions = true
+        try {
+            const effects = this._programState.getStructure()
+            const overrides = {}
+            for (const { step, width, height } of this._imageDimensions) {
+                const effect = effects.find(effect => effect.effectKey === 'synth.media' && (effect.temp ?? effect.stepIndex) === step)
+                if (!effect) continue
+                const key = `step_${effect.stepIndex}`
+                const current = this._programState.getValue(key, 'imageSize')
+                if (current?.[0] !== width || current?.[1] !== height) this._programState.setValue(key, 'imageSize', [width, height])
+                overrides[`step_${step}`] = { imageSize: [width, height] }
+            }
+            this._renderer.applyStepParameterValues(overrides)
+        } finally {
+            this._applyingImageDimensions = false
+        }
     }
 
     /** @returns {string} Current backend ('webgl2' or 'webgpu') */
@@ -212,6 +242,7 @@ export class ShadeRenderer {
         this.height = height
         if (this._renderer.resize) {
             this._renderer.resize(width, height)
+            if (this._imageTools && this._currentDsl) this._imageTools.bindMediaImages(this._renderer, this._currentDsl, this.images, { extractEffectsFromDsl }).catch(error => console.error('Image resize failed:', error))
         }
     }
 
@@ -284,6 +315,9 @@ export class ShadeRenderer {
         }
 
         try {
+            if (/\burl\b/.test(dsl)) this._imageTools = await import('https://sharing.noisedeck.app/js/portableImages.js?v=images-20260929')
+            const engineDsl = this._imageTools ? this._imageTools.stripMediaUrls(dsl) : dsl
+
             // Build augmented manifest that includes registered user effects
             const baseManifest = this._renderer.manifest || {}
             const registeredEffects = getAllEffects()
@@ -302,7 +336,7 @@ export class ShadeRenderer {
             }
             
             // Extract effect names and load them if needed
-            const effectData = extractEffectNamesFromDsl(dsl, augmentedManifest)
+            const effectData = extractEffectNamesFromDsl(engineDsl, augmentedManifest)
             const effectIds = effectData.map(e => e.effectId)
             
             // Filter out registered effects - they don't need to be loaded from bundles
@@ -316,10 +350,11 @@ export class ShadeRenderer {
             }
 
             // Build shader overrides from workspace if provided
-            const shaderOverrides = this._buildShaderOverrides(dsl, options.workspaceStore)
+            const shaderOverrides = this._buildShaderOverrides(engineDsl, options.workspaceStore)
 
             // Compile the DSL with shader overrides
-            await this._renderer.compile(dsl, { shaderOverrides })
+            await this._renderer.compile(engineDsl, { shaderOverrides })
+            this._imageDimensions = []
 
             // Normalize color uniforms: DSL defaults may be hex strings
             // which the WebGL uniform setter can't parse as vec3
@@ -332,10 +367,21 @@ export class ShadeRenderer {
 
             // Sync our ProgramState from the compiled DSL
             // This parses the DSL and initializes step states
-            this._programState.fromDsl(dsl)
+            this._programState.fromDsl(engineDsl)
 
             // Initialize text textures for any text effects in the pipeline
-            await this._initializeTextEffects(dsl, effectData)
+            await this._initializeTextEffects(engineDsl, effectData)
+            if (this._imageTools) {
+                const images = new Map([...this.images, ...(options.workspaceStore?.images || [])].map(image => [image.id, image]))
+                const referencedIds = new Set(this._imageTools.getMediaSources(dsl).map(source => source.url?.startsWith('image:') ? source.url.slice(6) : null))
+                this.images = [...images.values()].filter(image => referencedIds.has(image.id))
+                this._imageDimensions = await this._imageTools.bindMediaImages(this._renderer, dsl, this.images, { extractEffectsFromDsl })
+                this._applyImageDimensions()
+                if (options.workspaceStore) {
+                    options.workspaceStore.images = this.images
+                    if (options.workspaceStore.getFile('dsl.txt') !== dsl) options.workspaceStore.setFile('dsl.txt', dsl)
+                }
+            }
 
             return { success: true }
         } catch (err) {

@@ -386,12 +386,12 @@ importEffectDialog.onEffectImport(async ({ name, files }) => {
     }
 
     // Get DSL from definition's defaultProgram, or generate one
-    let dsl = null
+    let dsl = workspaceStore.getFile('dsl.txt') || workspaceStore.getFile('effect.dsl')
     const defContent = workspaceStore.files.get('definition.json')
     if (defContent) {
         try {
             const def = JSON.parse(defContent)
-            dsl = def.defaultProgram
+            dsl ||= def.defaultProgram
         } catch (e) { /* ignore parse errors */ }
     }
     if (!dsl) {
@@ -1154,6 +1154,7 @@ async function init() {
             updateLoadingStatus('Loading shared composition')
             try {
                 const composition = await loadFromCode(shareCode)
+                renderer.images = composition.images || []
                 console.log('[Workspace] Loaded shared composition:', composition.title || shareCode)
                 
                 // Populate workspace with effect files from rawEffects
@@ -1869,6 +1870,8 @@ async function handleExport() {
 
         const zip = new window.JSZip()
 
+        if (dsl && workspaceStore.images.length) zip.file('effect.dsl', dsl)
+
         // Add all workspace files, injecting defaultProgram into definition.json
         for (const [path, content] of Object.entries(files)) {
             if (path === 'dsl.txt') continue
@@ -2024,6 +2027,11 @@ async function handleEditInShade() {
         if (screenshot) payload.screenshot = screenshot
         if (effectZip) payload.effects = [effectZip]
         
+        if (/\burl\b/.test(payload.dsl)) {
+            const { prepareImagesForShare } = await import('https://sharing.noisedeck.app/js/portableImages.js?v=images-20260929')
+            Object.assign(payload, await prepareImagesForShare(payload.dsl, renderer.images || []))
+        }
+
         // Upload to sharing service
         const response = await fetch(SHARE_API_URL, {
             method: 'POST',
@@ -2165,6 +2173,11 @@ async function handleEditInNoisedeck() {
         if (screenshot) payload.screenshot = screenshot
         if (effectZip) payload.effects = [effectZip]
         
+        if (/\burl\b/.test(payload.dsl)) {
+            const { prepareImagesForShare } = await import('https://sharing.noisedeck.app/js/portableImages.js?v=images-20260929')
+            Object.assign(payload, await prepareImagesForShare(payload.dsl, renderer.images || []))
+        }
+
         // Upload to sharing service
         const response = await fetch(SHARE_API_URL, {
             method: 'POST',
@@ -2306,6 +2319,11 @@ async function handleEditInNoodles() {
         if (screenshot) payload.screenshot = screenshot
         if (effectZip) payload.effects = [effectZip]
 
+        if (/\burl\b/.test(payload.dsl)) {
+            const { prepareImagesForShare } = await import('https://sharing.noisedeck.app/js/portableImages.js?v=images-20260929')
+            Object.assign(payload, await prepareImagesForShare(payload.dsl, renderer.images || []))
+        }
+
         // Upload to sharing service
         const response = await fetch(SHARE_API_URL, {
             method: 'POST',
@@ -2442,6 +2460,11 @@ async function handleEditInPolymorphic() {
         if (screenshot) payload.screenshot = screenshot
         if (effectZip) payload.effects = [effectZip]
         
+        if (/\burl\b/.test(payload.dsl)) {
+            const { prepareImagesForShare } = await import('https://sharing.noisedeck.app/js/portableImages.js?v=images-20260929')
+            Object.assign(payload, await prepareImagesForShare(payload.dsl, renderer.images || []))
+        }
+
         // Upload to sharing service
         const response = await fetch(SHARE_API_URL, {
             method: 'POST',
@@ -2478,6 +2501,7 @@ async function handleEditInPolymorphic() {
  */
 async function handleLoadFromUrl(composition) {
     if (!composition) return
+    renderer.images = composition.images || []
     
     console.log('[Foundry] Loaded composition from URL:', composition.title || 'Untitled')
     

@@ -507,6 +507,9 @@ export class ImportEffectDialog {
                 // Include definition, shader files, and help
                 if (relativePath === 'definition.json' ||
                     relativePath === 'definition.js' ||
+                    relativePath === 'images.json' ||
+                    relativePath === 'dsl.txt' ||
+                    relativePath === 'effect.dsl' ||
                     relativePath === 'help.md' ||
                     relativePath.startsWith('glsl/') ||
                     relativePath.startsWith('wgsl/')) {

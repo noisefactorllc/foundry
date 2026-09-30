@@ -281,6 +281,11 @@ export class ShareModal {
                 hasEffects: !!effectZip
             })
 
+            if (/\burl\b/.test(payload.dsl)) {
+                const { prepareImagesForShare } = await import('https://sharing.noisedeck.app/js/portableImages.js?v=images-20260929')
+                Object.assign(payload, await prepareImagesForShare(payload.dsl, renderer?.images || []))
+            }
+
             const response = await fetch(SHARE_API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
