@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
+import vm from 'node:vm'
 
 const source = (await readFile(new URL('../public/js/sharingLoader.js', import.meta.url), 'utf8'))
     .replace(/import\s*\{[\s\S]*?\}\s*from '\.\/noisemaker\/bundle.js'/, 'const Effect = class {}; const registerEffect = () => {}; const registerOp = () => {}; const registerStarterOps = () => {}; const mergeIntoEnums = () => {}')
@@ -14,6 +15,36 @@ test('composition imports retain image bytes for rendering and reshare', async t
 })
 
 const { WorkspaceStore } = await import('../public/js/workspace/workspace-store.js')
+test('URL import checkpoints the composition DSL and images together after clearing an old workspace', async () => {
+    const app = await readFile(new URL('../public/js/app.js', import.meta.url), 'utf8')
+    const handler = app.match(/async function handleLoadFromUrl\(composition\) \{[\s\S]*?\n\}/)[0]
+    const store = new WorkspaceStore()
+    store.setFile('dsl.txt', 'old program')
+    store.images = [{ id: 'old' }]
+    const images = [{ id: 'a'.repeat(64), dataUrl: 'data:image/png;base64,AQIDBA==' }]
+    const dsl = `search synth\nmedia(url: "image:${images[0].id}").write(o0)`
+    let compilations = 0
+    const context = vm.createContext({
+        renderer: {}, workspaceStore: store, dslEditor: {}, canvasEditor: null, fileBrowser: null, console,
+        writePortableEffectToWorkspace: effect => store.setFile('definition.json', JSON.stringify(effect)),
+        setAgentStatus() {}, hideCompilerError() {}, toast: { success() {} },
+        recompileFromEditor: async () => {
+            ++compilations
+            assert.equal(store.getFile('dsl.txt'), dsl)
+            assert.deepEqual(store.images, images)
+            return { success: true }
+        }
+    })
+    await vm.runInContext(`(${handler})`, context)({ dsl, images, rawEffects: [{ name: 'imageEffect' }] })
+    assert.equal(compilations, 1)
+    store.setFile('dsl.txt', 'replacement')
+    store.images = []
+    store.checkpoint('replacement')
+    store.undo()
+    assert.equal(store.getFile('dsl.txt'), dsl)
+    assert.deepEqual(store.images, images)
+})
+
 test('workspace save and history retain original images with the DSL', () => {
     const images = [{ id: 'a'.repeat(64), dataUrl: 'data:image/png;base64,AQIDBA==' }]
     const dsl = `search synth\nmedia(url: "image:${images[0].id}").write(o0)`

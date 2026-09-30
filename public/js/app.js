@@ -1168,9 +1168,6 @@ async function init() {
                     
                     writePortableEffectToWorkspace(effectData)
 
-                    // Checkpoint the initial state
-                    workspaceStore.checkpoint('Loaded from share')
-                    
                     // Update file browser UI
                     fileBrowser.render()
                     
@@ -1186,6 +1183,8 @@ async function init() {
                     canvasEditorCurrentFile = 'dsl.txt'
                 }
                 workspaceStore.setFile('dsl.txt', dsl)
+                workspaceStore.images = renderer.images
+                workspaceStore.checkpoint('Loaded from share')
                 
                 // Clear the URL parameter to prevent reload loop
                 const url = new URL(window.location.href)
@@ -2524,9 +2523,6 @@ async function handleLoadFromUrl(composition) {
         
         writePortableEffectToWorkspace(effectData)
 
-        // Checkpoint the initial state
-        workspaceStore.checkpoint('Imported from URL')
-        
         // Update file browser UI
         if (fileBrowser) {
             fileBrowser.render()
@@ -2536,6 +2532,10 @@ async function handleLoadFromUrl(composition) {
             Array.from(workspaceStore.files.keys()))
     }
     
+    if (composition.dsl) workspaceStore.setFile('dsl.txt', composition.dsl)
+    workspaceStore.images = renderer.images
+    workspaceStore.checkpoint('Imported from URL')
+
     // Rebuild pipeline with new DSL. Await the recompile and surface its result
     // (same pattern as the code-editor compile paths) — otherwise a composition
     // whose DSL fails to compile would still report a false "Loaded" success

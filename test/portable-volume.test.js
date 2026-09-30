@@ -193,7 +193,8 @@ for (const [route, marker] of [['share code', "const shareCode = getCodeFromUrl(
         const h = load('../public/js/workspace/index.js', 'registerEffectFromWorkspace')
         const source = readFileSync(new URL('../public/js/app.js', import.meta.url), 'utf8')
         const start = source.indexOf('// Clear existing workspace', source.indexOf(marker))
-        const end = source.indexOf('// Checkpoint the initial state', start)
+        const hydration = 'writePortableEffectToWorkspace(effectData)'
+        const end = source.indexOf(hydration, start) + hydration.length
         assert.ok(start >= 0 && end > start)
         h.context.workspaceStore.clear = () => h.files.clear()
         h.context.effectData = definition
