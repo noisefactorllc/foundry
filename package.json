@@ -6,7 +6,7 @@
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
-    "dev": "nodemon server/index.js",
+    "dev": "node --watch server/index.js",
     "test": "node --test test/*.test.js"
   },
   "dependencies": {
@@ -14,7 +14,6 @@
     "express": "^5.2.1"
   },
   "devDependencies": {
-    "nodemon": "^3.1.14",
     "playwright": "^1.63.0"
   },
   "engines": {
