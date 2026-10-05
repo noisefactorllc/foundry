@@ -1869,7 +1869,11 @@ async function handleExport() {
 
         const zip = new window.JSZip()
 
-        if (dsl && workspaceStore.images.length) zip.file('effect.dsl', dsl)
+        // dsl.txt is never copied into the ZIP below, so effect.dsl is the only
+        // place the program travels in. Gating it on images meant a DSL-only
+        // workspace (edited straight in the editor, no imported definition or
+        // images) exported an archive with no program in it at all.
+        if (dsl.trim()) zip.file('effect.dsl', dsl)
 
         // Add all workspace files, injecting defaultProgram into definition.json
         for (const [path, content] of Object.entries(files)) {
