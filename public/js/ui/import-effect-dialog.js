@@ -7,6 +7,8 @@
  * @module ui/import-effect-dialog
  */
 
+import { LEGACY_IMAGES_FILE, imageFileRecords, isImageFilePath, readImageFile, readLegacyImagesFile } from '../imageRecords.js'
+
 // Inject styles once
 const STYLES_ID = 'import-effect-dialog-styles'
 if (!document.getElementById(STYLES_ID)) {
@@ -497,6 +499,10 @@ export class ImportEffectDialog {
             // Extract all relevant files
             let hasGlsl = false
             let hasWgsl = false
+            // Images, as Blob records: images/<id>.<ext> files, and the base64
+            // images.json that ZIPs exported before images were files hold
+            const imageFiles = []
+            let legacyImages = []
 
             for (const [path, zipFile] of Object.entries(zip.files)) {
                 if (zipFile.dir) continue
@@ -504,10 +510,19 @@ export class ImportEffectDialog {
 
                 const relativePath = basePath ? path.slice(basePath.length) : path
 
+                if (isImageFilePath(relativePath)) {
+                    const image = await readImageFile(relativePath, await zipFile.async('uint8array'))
+                    if (image) imageFiles.push(image)
+                    continue
+                }
+                if (relativePath === LEGACY_IMAGES_FILE) {
+                    legacyImages = readLegacyImagesFile(await zipFile.async('text'))
+                    continue
+                }
+
                 // Include definition, shader files, and help
                 if (relativePath === 'definition.json' ||
                     relativePath === 'definition.js' ||
-                    relativePath === 'images.json' ||
                     relativePath === 'dsl.txt' ||
                     relativePath === 'effect.dsl' ||
                     relativePath === 'help.md' ||
@@ -557,11 +572,13 @@ export class ImportEffectDialog {
             let details = `${fileCount} files`
             if (glslCount > 0) details += ` • ${glslCount} GLSL`
             if (wgslCount > 0) details += ` • ${wgslCount} WGSL`
+            const images = imageFileRecords([...imageFiles, ...legacyImages])
+            if (images.length > 0) details += ` • ${images.length} image${images.length === 1 ? '' : 's'}`
             this._infoDetails.textContent = details
             this._info.classList.add('visible')
 
             // Store for import
-            this.pendingZip = { name, files }
+            this.pendingZip = { name, files, images }
             this._importBtn.disabled = false
 
         } catch (err) {

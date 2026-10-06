@@ -8,6 +8,7 @@
 import { ShadeRenderer } from './noisemaker/index.js'
 import { preloadFontsForDsl } from './fontLoader.js'
 import { workspaceStore, saveWorkspace, loadWorkspace, registerEffectFromWorkspace, writePortableEffectToWorkspace } from './workspace/index.js'
+import { imageFilePath } from './imageRecords.js'
 import { FileBrowser, ParamControls, SavedEffects, keyboard, toast, helpModal, aboutModal, nameDialog, CodeEditor, deleteEffectDialog, initDocReader, toggleDocReader, showDocReader, hideDocReader, isDocReaderVisible, showPlaceholderContent, importFromUrlDialog } from './ui/index.js'
 import { OpenEffectDialog } from './ui/open-effect-dialog.js'
 import { ImportEffectDialog } from './ui/import-effect-dialog.js'
@@ -367,7 +368,7 @@ async function refreshEffectDialog() {
 const importEffectDialog = new ImportEffectDialog()
 
 // Set up the callback for when an effect is imported from ZIP
-importEffectDialog.onEffectImport(async ({ name, files }) => {
+importEffectDialog.onEffectImport(async ({ name, files, images = [] }) => {
     // Clear workspace
     workspaceStore.files.clear()
     workspaceStore.name = name
@@ -384,9 +385,8 @@ importEffectDialog.onEffectImport(async ({ name, files }) => {
             workspaceStore.files.set(path, content)
         }
     }
-    // An exported workspace lists its images in images.json; the workspace
-    // holds them as Blob records, not as a file.
-    workspaceStore.images = workspaceStore.takeImagesFile()
+    // The ZIP's images, as Blob records
+    workspaceStore.images = images
 
     // Get DSL from definition's defaultProgram, or generate one
     let dsl = workspaceStore.getFile('dsl.txt') || workspaceStore.getFile('effect.dsl')
@@ -1891,7 +1891,10 @@ async function handleExport() {
             }
             zip.file(path, content)
         }
-        if (workspaceStore.images.length) zip.file('images.json', await exportedImagesFile(workspaceStore.images))
+        // Each image goes in as a binary file, images/<id>.<ext>.
+        for (const image of workspaceStore.images) {
+            if (image.blob instanceof Blob) zip.file(imageFilePath(image), image.blob)
+        }
         
         const blob = await zip.generateAsync({ type: 'blob' })
         const url = URL.createObjectURL(blob)
@@ -1907,26 +1910,6 @@ async function handleExport() {
     } catch (error) {
         toast.error(`Export failed: ${error.message}`)
     }
-}
-
-/**
- * The images.json file an exported ZIP lists the workspace's images in, in
- * the layout Foundry has always exported and imports: { id, dataUrl,
- * mimeType, width, height } records. The ZIP is a local download; the
- * workspace itself holds and saves its images as Blobs.
- * @param {Array<{id: string, blob: Blob, mimeType?: string, width?: number, height?: number}>} images
- * @returns {Promise<string>}
- */
-async function exportedImagesFile(images) {
-    const listed = []
-    for (const { id, blob, mimeType, width, height } of images) {
-        if (!(blob instanceof Blob)) continue
-        const bytes = new Uint8Array(await blob.arrayBuffer())
-        let raw = ''
-        for (let start = 0; start < bytes.length; start += 32768) raw += String.fromCharCode(...bytes.subarray(start, start + 32768))
-        listed.push({ id, dataUrl: `data:${blob.type};base64,${btoa(raw)}`, mimeType, width, height })
-    }
-    return JSON.stringify(listed)
 }
 
 // Edit in other apps

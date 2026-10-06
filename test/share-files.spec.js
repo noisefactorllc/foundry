@@ -368,6 +368,12 @@ test('Foundry shares images as files and reopens them from the sharing service',
         //    images.json file. It opens with the image as a Blob, renders it, and is saved
         //    again with the image as a Blob; sharing it sends the image as a file.
         const earlier = await newFoundryContext()
+        let exported
+        const importZips = {}
+        const effectFiles = {
+            'definition.json': JSON.stringify({ name: 'roundTrip', func: 'roundTrip', starter: true }),
+            'glsl/main.glsl': '#version 300 es\nprecision highp float;\nout vec4 fragColor;\nvoid main() { fragColor = vec4(1.0); }\n'
+        }
         try {
             const seed = await earlier.newPage()
             await seed.goto(`${FOUNDRY_ORIGIN}/health`)
@@ -414,8 +420,61 @@ test('Foundry shares images as files and reopens them from the sharing service',
             assert.deepEqual(images[0].body, RED)
             const { entry } = await stored(result.code)
             assert.doesNotMatch(entry, TEXT_IMAGE)
+
+            // Export to ZIP: the image is a binary file images/<id>.png; there is no images.json.
+            await page.keyboard.press('Escape')
+            await page.locator('#share-url').waitFor({ state: 'detached' })
+            const download = page.waitForEvent('download')
+            await chooseMenuItem(page, 'file', 'export effect to zip')
+            exported = await readFile(await (await download).path())
+            const listing = await page.evaluate(async bytes => {
+                const zip = await window.JSZip.loadAsync(new Uint8Array(bytes))
+                const entries = {}
+                for (const [path, file] of Object.entries(zip.files)) if (!file.dir) entries[path] = [...await file.async('uint8array')]
+                return entries
+            }, [...exported])
+            console.log('exported ZIP entries:', JSON.stringify(Object.keys(listing)))
+            assert.deepEqual(Object.keys(listing).sort(), ['effect.dsl', `images/${RED_ID}.png`])
+            assert.deepEqual(Buffer.from(listing[`images/${RED_ID}.png`]), RED)
+            assert.doesNotMatch(Buffer.from(listing['effect.dsl']).toString('utf8'), TEXT_IMAGE)
+
+            // ZIPs to import in step 8: the export with an effect definition added, and the same
+            // with its image as an earlier export kept it, base64 text in images.json.
+            for (const legacy of [false, true]) {
+                importZips[legacy ? 'legacy' : 'exported'] = Buffer.from(await page.evaluate(async ({ exported, effectFiles, legacy, legacyImages }) => {
+                    const zip = await window.JSZip.loadAsync(new Uint8Array(exported))
+                    for (const [path, content] of Object.entries(effectFiles)) zip.file(path, content)
+                    if (legacy) {
+                        for (const path of Object.keys(zip.files)) if (path.startsWith('images/')) zip.remove(path)
+                        zip.file('images.json', legacyImages)
+                    }
+                    return [...await zip.generateAsync({ type: 'uint8array' })]
+                }, { exported: [...exported], effectFiles, legacy, legacyImages: JSON.stringify([{ id: RED_ID, dataUrl: `data:image/png;base64,${RED.toString('base64')}`, mimeType: 'image/png', width: 2, height: 2 }]) }))
+            }
             assert.deepEqual(errors, [])
         } finally { await earlier.close() }
+
+        // 8. "import effect from zip" reads the exported image file, and an earlier ZIP's
+        //    base64 images.json, into Blob records that render.
+        for (const [label, legacy] of [['exported ZIP', false], ['earlier ZIP with images.json', true]]) {
+            const context = await newFoundryContext()
+            try {
+                const { page, errors } = await openFoundry(context)
+                await chooseMenuItem(page, 'file', 'import effect from zip...')
+                await page.locator('.import-effect-file-input').setInputFiles({ name: 'roundTrip.zip', mimeType: 'application/zip', buffer: importZips[legacy ? 'legacy' : 'exported'] })
+                await page.locator('.import-effect-info-details').filter({ hasText: '1 image' }).waitFor({ timeout: 30000 })
+                await page.locator('.import-effect-btn-primary').click()
+                const pixel = await waitForPixel(page, RED_PIXEL)
+                console.log(`${label} import pixel:`, JSON.stringify(pixel))
+                assert.deepEqual(pixel, RED_PIXEL, label)
+                for (const image of await heldImages(page, 'workspace')) assert.deepEqual([image.id, image.blob, image.text], [RED_ID, true, false], label)
+                assert.equal((await heldImages(page, 'workspace')).length, 1, label)
+                assert.equal(await page.evaluate(() => window.effectWorkspace.workspaceStore.hasFile('images.json')), false, label)
+                const saved = await expectSavedBlobImages(page, [RED_ID], label)
+                assert.equal(saved.images[0].size, RED.length)
+                assert.deepEqual(errors, [], label)
+            } finally { await context.close() }
+        }
     } finally {
         await browser?.close()
         await stopServer(foundry)

@@ -2,6 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
+import { createHash } from 'node:crypto'
+import { imageFilePath } from '../public/js/imageRecords.js'
 
 // handleExport turns the workspace into a downloadable ZIP. dsl.txt is
 // deliberately NOT copied into the archive, so effect.dsl is the only place the
@@ -36,7 +38,7 @@ function runExport({ files, dsl, name = 'workspace', images = [] }) {
     const context = vm.createContext({
         console,
         Blob,
-        btoa,
+        imageFilePath,
         URL: { createObjectURL: () => 'blob:fake', revokeObjectURL: () => {} },
         document: {
             createElement: () => anchor,
@@ -57,17 +59,29 @@ test('export includes the program for a DSL-only workspace', { timeout: 3000 }, 
     assert.equal(zip.entries.get('effect.dsl'), dsl, 'the program must travel in the ZIP')
 })
 
-test('export keeps the image-composition layout (effect.dsl + images.json)', { timeout: 3000 }, async () => {
-    // The workspace holds its images as Blobs; the exported archive lists them
-    // in images.json, byte-for-byte the layout earlier exports carried and
-    // ZIP import reads.
-    const bytes = new Uint8Array([1, 2, 3, 4])
-    const image = { id: 'abc', blob: new Blob([bytes], { type: 'image/png' }), mimeType: 'image/png', width: 2, height: 2 }
-    const dsl = 'search synth\nmedia(url: "image:abc").write(o0)'
-    const files = { 'dsl.txt': dsl }
-    const zip = await runExport({ files, dsl, images: [image] })
+test('export writes each image as a binary file images/<id>.<ext>, with no images.json or base64', { timeout: 3000 }, async () => {
+    // The workspace holds its images as Blobs; the exported archive keeps
+    // each one as its own image file, in the layout Shade's ZIPs use.
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 4])
+    const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xd9])
+    const id = bytes => createHash('sha256').update(bytes).digest('hex')
+    const images = [
+        { id: id(png), blob: new Blob([png], { type: 'image/png' }), mimeType: 'image/png', width: 2, height: 2 },
+        { id: id(jpeg), blob: new Blob([jpeg], { type: 'image/jpeg' }), mimeType: 'image/jpeg', width: 1, height: 1 }
+    ]
+    const dsl = `search synth\nmedia(url: "image:${images[0].id}").write(o0)\nmedia(url: "image:${images[1].id}").write(o1)`
+    const zip = await runExport({ files: { 'dsl.txt': dsl }, dsl, images })
     assert.equal(zip.entries.get('effect.dsl'), dsl)
-    assert.equal(zip.entries.get('images.json'), JSON.stringify([{ id: 'abc', dataUrl: 'data:image/png;base64,AQIDBA==', mimeType: 'image/png', width: 2, height: 2 }]))
+    assert.deepEqual([...zip.entries.keys()].sort(), ['effect.dsl', `images/${images[0].id}.png`, `images/${images[1].id}.jpg`].sort())
+    assert.equal(zip.entries.has('images.json'), false)
+    for (const [image, bytes] of [[images[0], png], [images[1], jpeg]]) {
+        const entry = zip.entries.get(imageFilePath(image))
+        assert.ok(entry instanceof Blob, 'the image file is binary')
+        assert.deepEqual(new Uint8Array(await entry.arrayBuffer()), bytes)
+    }
+    for (const [path, entry] of zip.entries) {
+        if (typeof entry === 'string') assert.doesNotMatch(entry, /base64|data:image|dataUrl/, path)
+    }
 })
 
 test('export without images writes no images.json', { timeout: 3000 }, async () => {

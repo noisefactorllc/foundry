@@ -50,7 +50,80 @@ export function imageFileRecord(image) {
  * @returns {Array<object>}
  */
 export function imageFileRecords(images) {
-    return Array.isArray(images) ? images.map(imageFileRecord).filter(Boolean) : []
+    if (!Array.isArray(images)) return []
+    // One record per id: the id is the SHA-256 of the bytes, so it is one image.
+    const records = new Map()
+    for (const image of images) {
+        const record = imageFileRecord(image)
+        if (record && !records.has(record.id)) records.set(record.id, record)
+    }
+    return [...records.values()]
+}
+
+/** The file earlier workspaces and exported ZIPs listed their images in, as base64 text. */
+export const LEGACY_IMAGES_FILE = 'images.json'
+
+/**
+ * Read the images an earlier images.json file listed as base64 text into
+ * Blob records. A file that holds no image list gives no images, logged.
+ * @param {string} content - The file's JSON text
+ * @returns {Array<object>}
+ */
+export function readLegacyImagesFile(content) {
+    let images
+    try {
+        images = JSON.parse(content)
+    } catch {
+        images = null
+    }
+    if (!Array.isArray(images)) {
+        console.warn(`${LEGACY_IMAGES_FILE} holds no image list; its images were left out`)
+        return []
+    }
+    return imageFileRecords(images)
+}
+
+// Workspace ZIPs keep each image as a binary file, images/<id>.<ext>, relative
+// to the effect's definition, in the layout Shade's ZIPs use.
+const IMAGE_EXTENSIONS = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' }
+const IMAGE_TYPES = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' }
+const IMAGE_FILE_PATH = /^images\/([a-f0-9]{64})\.([A-Za-z0-9]+)$/
+
+/**
+ * The path a workspace ZIP keeps an image record's bytes at: images/<id>.<ext>.
+ * @param {{id: string, blob: Blob, mimeType?: string}} image
+ * @returns {string}
+ */
+export function imageFilePath(image) {
+    return `images/${image.id}.${IMAGE_EXTENSIONS[image.mimeType || image.blob?.type] || 'img'}`
+}
+
+/**
+ * Whether a workspace ZIP path, relative to the effect's definition, names an image file.
+ * @param {string} path
+ * @returns {boolean}
+ */
+export function isImageFilePath(path) {
+    return IMAGE_FILE_PATH.test(path)
+}
+
+/**
+ * An image file from a workspace ZIP as a Blob record, checked against the
+ * SHA-256 id its path names. A file that does not match is left out and logged.
+ * @param {string} path - images/<id>.<ext>
+ * @param {Uint8Array} bytes - The file's bytes
+ * @returns {Promise<object|null>}
+ */
+export async function readImageFile(path, bytes) {
+    const match = IMAGE_FILE_PATH.exec(path)
+    if (!match) return null
+    const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), byte => byte.toString(16).padStart(2, '0')).join('')
+    if (digest !== match[1]) {
+        console.warn(`Image file ${path} was left out: its bytes do not match its id`)
+        return null
+    }
+    const mimeType = IMAGE_TYPES[match[2].toLowerCase()] || ''
+    return { id: match[1], blob: new Blob([bytes], { type: mimeType }), mimeType }
 }
 
 /**

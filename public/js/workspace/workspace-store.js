@@ -7,10 +7,7 @@
  * @module workspace/workspace-store
  */
 
-import { imageFileRecords, sameImages } from '../imageRecords.js'
-
-// The file earlier workspaces and exported ZIPs list their images in.
-const IMAGES_FILE = 'images.json'
+import { LEGACY_IMAGES_FILE, imageFileRecords, readLegacyImagesFile, sameImages } from '../imageRecords.js'
 
 /**
  * @typedef {Object} WorkspaceState
@@ -85,27 +82,15 @@ export class WorkspaceStore extends EventTarget {
     }
 
     /**
-     * Take the images that an earlier workspace or an exported ZIP lists in an
-     * `images.json` file: the file is removed, and its `{ id, dataUrl }`
+     * Take the images that an earlier workspace lists in an `images.json` file: the file is removed, and its `{ id, dataUrl }`
      * records are returned as Blob records. Images are never kept as a file.
      * @returns {Array<object>} The Blob records; empty when there is no file
      */
     takeImagesFile() {
-        const content = this.files.get(IMAGES_FILE)
+        const content = this.files.get(LEGACY_IMAGES_FILE)
         if (content === undefined) return []
-        this.files.delete(IMAGES_FILE)
-        let listed
-        try {
-            listed = JSON.parse(content)
-        } catch (error) {
-            console.warn('[Workspace] images.json was not loaded:', error)
-            return []
-        }
-        if (!Array.isArray(listed)) {
-            console.warn('[Workspace] images.json was not loaded: not a list of images')
-            return []
-        }
-        return imageFileRecords(listed)
+        this.files.delete(LEGACY_IMAGES_FILE)
+        return readLegacyImagesFile(content)
     }
 
     /**

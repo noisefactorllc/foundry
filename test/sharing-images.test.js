@@ -151,7 +151,7 @@ test('an earlier workspace that lists its images as base64 in images.json loads 
         // An image that cannot be read as a PNG, JPEG, GIF or WebP is left out, not kept as text.
         assert.deepEqual(warnings, [`Image ${'d'.repeat(64)} was not loaded:`])
 
-        // A ZIP import puts images.json among the files; the import takes it the same way.
+        // takeImagesFile takes an images.json among the files the same way.
         const imported = new WorkspaceStore()
         imported.files.set('images.json', files['images.json'])
         imported.images = imported.takeImagesFile()
@@ -174,30 +174,75 @@ test('image records: earlier base64 records are read into Blobs and Blob records
     assert.deepEqual(imageFileRecords(undefined), [])
 })
 
-test('workspace ZIP import preserves image assets and composition DSL', async t => {
+/** Run "import effect from zip" on a fake ZIP of `files`; strings are text, Uint8Arrays binary. */
+async function importZip(t, files) {
     const oldDocument = globalThis.document
     const oldZip = globalThis.JSZip
     globalThis.document = { getElementById: () => ({}) }
     t.after(() => { globalThis.document = oldDocument; globalThis.JSZip = oldZip })
     const { ImportEffectDialog } = await import('../public/js/ui/import-effect-dialog.js')
-    const files = {
-        'effect/definition.json': '{"name":"imageEffect"}',
-        'effect/glsl/main.glsl': 'void main() {}',
-        'effect/images.json': '[{"id":"original","dataUrl":"data:image/png;base64,AQIDBA=="}]',
-        'effect/effect.dsl': 'search synth\nmedia(url: "image:original").write(o0)'
-    }
-    globalThis.JSZip = { loadAsync: async () => ({ files: Object.fromEntries(Object.entries(files).map(([path, content]) => [path, { dir: false, async: async () => content }])) }) }
+    const read = (content, type) => type === 'uint8array'
+        ? (typeof content === 'string' ? new TextEncoder().encode(content) : content)
+        : (typeof content === 'string' ? content : Buffer.from(content).toString('latin1'))
+    globalThis.JSZip = { loadAsync: async () => ({ files: Object.fromEntries(Object.entries(files).map(([path, content]) => [path, { dir: false, async: async type => read(content, type) }])) }) }
     const el = () => ({ classList: { add() {}, remove() {} }, textContent: '' })
     const dialog = Object.assign(Object.create(ImportEffectDialog.prototype), {
         _error: el(), _info: el(), _importBtn: {}, _infoName: el(), _infoDetails: el()
     })
     await dialog._processFile({})
-    assert.equal(dialog.pendingZip?.files['images.json'], files['effect/images.json'])
-    assert.equal(dialog.pendingZip?.files['effect.dsl'], files['effect/effect.dsl'])
-    // The workspace takes the listed images as Blob records when the ZIP is imported.
+    return dialog
+}
+
+test('workspace ZIP import reads images/<id>.<ext> files as Blob records, checked against their ids', async t => {
+    const warn = console.warn
+    const warnings = []
+    console.warn = message => warnings.push(message)
+    t.after(() => { console.warn = warn })
+    const dsl = `search synth\nmedia(url: "image:${RED_PNG.id}").write(o0)\nmedia(url: "image:${BLUE_PNG.id}").write(o1)`
+    const dialog = await importZip(t, {
+        'effect/definition.json': '{"name":"imageEffect"}',
+        'effect/glsl/main.glsl': 'void main() {}',
+        'effect/effect.dsl': dsl,
+        [`effect/images/${RED_PNG.id}.png`]: RED_PNG.bytes,
+        [`effect/images/${BLUE_PNG.id}.png`]: BLUE_PNG.bytes,
+        // Bytes that do not match the id their path names are left out.
+        [`effect/images/${'e'.repeat(64)}.png`]: RED_PNG.bytes
+    })
+    assert.equal(dialog.pendingZip?.files['effect.dsl'], dsl)
+    assert.deepEqual(Object.keys(dialog.pendingZip.files).sort(), ['definition.json', 'effect.dsl', 'glsl/main.glsl'])
+    await assertBlobRecords(dialog.pendingZip.images, [RED_PNG, BLUE_PNG])
+    assert.deepEqual(dialog.pendingZip.images.map(image => image.mimeType), ['image/png', 'image/png'])
+    assert.deepEqual(warnings, [`Image file images/${'e'.repeat(64)}.png was left out: its bytes do not match its id`])
+    assert.match(dialog._infoDetails.textContent, /2 images/)
+})
+
+test('workspace ZIP import reads an earlier ZIP\'s base64 images.json into Blob records', async t => {
+    const dsl = `search synth\nmedia(url: "image:${RED_PNG.id}").write(o0)`
+    const dialog = await importZip(t, {
+        'effect/definition.json': '{"name":"imageEffect"}',
+        'effect/glsl/main.glsl': 'void main() {}',
+        'effect/images.json': JSON.stringify([{ id: RED_PNG.id, dataUrl: RED_PNG.dataUrl, mimeType: 'image/png', width: 2, height: 2 }]),
+        'effect/effect.dsl': dsl
+    })
+    assert.equal(dialog.pendingZip?.files['effect.dsl'], dsl)
+    assert.equal('images.json' in dialog.pendingZip.files, false, 'images.json is not kept as a file')
+    await assertBlobRecords(dialog.pendingZip.images, [RED_PNG])
+    // The workspace takes the ZIP's Blob records when the ZIP is imported.
     const app = await readFile(new URL('../public/js/app.js', import.meta.url), 'utf8')
     const onImport = app.slice(app.indexOf('importEffectDialog.onEffectImport('), app.indexOf('// Get DSL from definition\'s defaultProgram'))
-    assert.match(onImport, /workspaceStore\.images = workspaceStore\.takeImagesFile\(\)/)
+    assert.match(onImport, /onEffectImport\(async \(\{ name, files, images = \[\] \}\)/)
+    assert.match(onImport, /workspaceStore\.images = images/)
+})
+
+test('an exported ZIP imports back with the same Blob records', async t => {
+    const app = await readFile(new URL('../public/js/app.js', import.meta.url), 'utf8')
+    const { imageFilePath } = await import('../public/js/imageRecords.js')
+    assert.match(app, /zip\.file\(imageFilePath\(image\), image\.blob\)/)
+    const images = [fileRecord(RED_PNG), fileRecord(BLUE_PNG)]
+    const files = { 'definition.json': '{"name":"roundTrip"}', 'glsl/main.glsl': 'void main() {}' }
+    for (const image of images) files[imageFilePath(image)] = new Uint8Array(await image.blob.arrayBuffer())
+    const dialog = await importZip(t, files)
+    await assertBlobRecords(dialog.pendingZip.images, [RED_PNG, BLUE_PNG])
 })
 
 // Sharing images as files: no image is sent or stored as base64 text.
