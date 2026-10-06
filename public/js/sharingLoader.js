@@ -23,7 +23,8 @@ const SHARING_API_BASE = 'https://sharing.noisedeck.app'
  * @returns {Promise<object>} Composition data including dsl, effects, title, etc.
  */
 export async function fetchComposition(code) {
-    const response = await fetch(`${SHARING_API_BASE}/api/composition/${code}`)
+    // ?images=files lists the composition's images as { id, url } files.
+    const response = await fetch(`${SHARING_API_BASE}/api/composition/${code}?images=files`)
 
     if (!response.ok) {
         if (response.status === 404) {
@@ -32,7 +33,9 @@ export async function fetchComposition(code) {
         throw new Error(`Failed to fetch composition: ${response.status}`)
     }
 
-    return response.json()
+    const composition = await response.json()
+    composition.images = await loadSharedImageFiles(composition.images)
+    return composition
 }
 
 /**
@@ -186,4 +189,90 @@ export async function loadFromCode(code) {
 export function getCodeFromUrl() {
     const urlParams = new URLSearchParams(window.location.search)
     return urlParams.get('code')
+}
+
+/**
+ * Shared compositions list their images as { id, url } files. Load each file
+ * into the { id, dataUrl, ... } images the renderer binds, checked against its
+ * id. A file that cannot be loaded is left out and logged.
+ */
+export async function loadSharedImageFiles(images = []) {
+    if (!images.some(image => image?.url && image.dataUrl === undefined)) return images
+    const { prepareImage } = await import('https://sharing.noisedeck.app/js/portableImages.js?v=images-20260929')
+    const loaded = await Promise.all(images.map(async image => {
+        if (!image?.url || image.dataUrl !== undefined) return image
+        try {
+            const response = await fetch(image.url)
+            if (!response.ok) throw new Error(`HTTP ${response.status}`)
+            const prepared = await prepareImage(await response.blob())
+            if (prepared.id !== image.id) throw new Error('the image bytes do not match their id')
+            return prepared
+        } catch (error) {
+            console.warn(`Shared image ${image.id} was not loaded:`, error)
+            return null
+        }
+    }))
+    return loaded.filter(Boolean)
+}
+
+/**
+ * Upload an image file to the sharing service.
+ * @param {Blob} blob - The image file (PNG, JPEG, GIF or WebP)
+ * @returns {Promise<string>} The id to name it by, as `image:<id>`
+ */
+export async function uploadImage(blob) {
+    const response = await fetch(`${SHARING_API_BASE}/api/images`, {
+        method: 'POST',
+        headers: { 'Content-Type': blob.type },
+        body: blob
+    })
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({}))
+        throw new Error(error.error || `Image upload failed: ${response.status}`)
+    }
+    return (await response.json()).id
+}
+
+/**
+ * Capture and upload the share screenshot as a JPEG file. The screenshot is
+ * best-effort: if it cannot be captured or uploaded, the share goes without it.
+ * @param {HTMLCanvasElement|null} canvas - The 1200x630 screenshot canvas
+ * @returns {Promise<string|undefined>} The uploaded screenshot's id
+ */
+export async function uploadScreenshot(canvas) {
+    if (!canvas) return undefined
+    try {
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85))
+        return blob ? await uploadImage(blob) : undefined
+    } catch (error) {
+        console.warn('Share screenshot was not uploaded:', error)
+        return undefined
+    }
+}
+
+/**
+ * Send a share payload's images and screenshot to the sharing service as
+ * files. Each image the program uses is uploaded with POST /api/images and
+ * named in `payload.dsl` by the id the service returns; the screenshot is
+ * uploaded as a JPEG and `payload.screenshot` is set to its id. No image is
+ * sent as base64.
+ * @param {object} payload - The share request body; `dsl` and `screenshot` are set
+ * @param {object} options
+ * @param {Array<{id: string, dataUrl: string}>} [options.images] - The renderer's images
+ * @param {HTMLCanvasElement|null} [options.screenshot] - The screenshot canvas
+ * @returns {Promise<object>} The payload
+ */
+export async function attachShareFiles(payload, { images = [], screenshot = null } = {}) {
+    if (/\burl\b/.test(payload.dsl)) {
+        const tools = await import('https://sharing.noisedeck.app/js/portableImages.js?v=images-20260929')
+        const prepared = await tools.prepareImagesForShare(payload.dsl, images)
+        const ids = new Map()
+        for (const image of prepared.images) ids.set(image.id, await uploadImage(tools.imageToBlob(image)))
+        payload.dsl = [...ids].every(([from, to]) => from === to)
+            ? prepared.dsl
+            : tools.replaceMediaUrls(prepared.dsl, url => url?.startsWith('image:') && ids.has(url.slice(6)) ? `image:${ids.get(url.slice(6))}` : url)
+    }
+    const screenshotId = await uploadScreenshot(screenshot)
+    if (screenshotId) payload.screenshot = screenshotId
+    return payload
 }

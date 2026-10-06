@@ -13,7 +13,7 @@ import { OpenEffectDialog } from './ui/open-effect-dialog.js'
 import { ImportEffectDialog } from './ui/import-effect-dialog.js'
 import { WorkspaceFilesDialog } from './ui/workspace-files-dialog.js'
 import { shareModal } from './ui/share-modal.js'
-import { loadFromCode, getCodeFromUrl } from './sharingLoader.js'
+import { loadFromCode, getCodeFromUrl, attachShareFiles } from './sharingLoader.js'
 import {
     errorHandler,
     handleError,
@@ -1962,7 +1962,7 @@ async function handleEditInShade() {
                 sy = (canvas.height - sh) / 2
             }
             ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, targetWidth, targetHeight)
-            screenshot = tempCanvas.toDataURL('image/jpeg', 0.85)
+            screenshot = tempCanvas
         } catch (err) {
             console.warn('[Shade] Screenshot capture failed:', err)
         }
@@ -2027,13 +2027,10 @@ async function handleEditInShade() {
             description: 'Created with Foundry',
             ttlMinutes: 60
         }
-        if (screenshot) payload.screenshot = screenshot
         if (effectZip) payload.effects = [effectZip]
         
-        if (/\burl\b/.test(payload.dsl)) {
-            const { prepareImagesForShare } = await import('https://sharing.noisedeck.app/js/portableImages.js?v=images-20260929')
-            Object.assign(payload, await prepareImagesForShare(payload.dsl, renderer.images || []))
-        }
+        // Images and the screenshot go to the sharing service as files.
+        await attachShareFiles(payload, { images: renderer.images || [], screenshot })
 
         // Upload to sharing service
         const response = await fetch(SHARE_API_URL, {
@@ -2111,7 +2108,7 @@ async function handleEditInNoisedeck() {
                 sy = (canvas.height - sh) / 2
             }
             ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, targetWidth, targetHeight)
-            screenshot = tempCanvas.toDataURL('image/jpeg', 0.85)
+            screenshot = tempCanvas
         } catch (err) {
             console.warn('[Noisedeck] Screenshot capture failed:', err)
         }
@@ -2173,13 +2170,10 @@ async function handleEditInNoisedeck() {
             description: 'Created with Foundry',
             ttlMinutes: 60
         }
-        if (screenshot) payload.screenshot = screenshot
         if (effectZip) payload.effects = [effectZip]
         
-        if (/\burl\b/.test(payload.dsl)) {
-            const { prepareImagesForShare } = await import('https://sharing.noisedeck.app/js/portableImages.js?v=images-20260929')
-            Object.assign(payload, await prepareImagesForShare(payload.dsl, renderer.images || []))
-        }
+        // Images and the screenshot go to the sharing service as files.
+        await attachShareFiles(payload, { images: renderer.images || [], screenshot })
 
         // Upload to sharing service
         const response = await fetch(SHARE_API_URL, {
@@ -2257,7 +2251,7 @@ async function handleEditInNoodles() {
                 sy = (canvas.height - sh) / 2
             }
             ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, targetWidth, targetHeight)
-            screenshot = tempCanvas.toDataURL('image/jpeg', 0.85)
+            screenshot = tempCanvas
         } catch (err) {
             console.warn('[Noodles] Screenshot capture failed:', err)
         }
@@ -2319,13 +2313,10 @@ async function handleEditInNoodles() {
             description: 'Created with Foundry',
             ttlMinutes: 60
         }
-        if (screenshot) payload.screenshot = screenshot
         if (effectZip) payload.effects = [effectZip]
 
-        if (/\burl\b/.test(payload.dsl)) {
-            const { prepareImagesForShare } = await import('https://sharing.noisedeck.app/js/portableImages.js?v=images-20260929')
-            Object.assign(payload, await prepareImagesForShare(payload.dsl, renderer.images || []))
-        }
+        // Images and the screenshot go to the sharing service as files.
+        await attachShareFiles(payload, { images: renderer.images || [], screenshot })
 
         // Upload to sharing service
         const response = await fetch(SHARE_API_URL, {
@@ -2403,7 +2394,7 @@ async function handleEditInPolymorphic() {
                 sy = (canvas.height - sh) / 2
             }
             ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, targetWidth, targetHeight)
-            screenshot = tempCanvas.toDataURL('image/jpeg', 0.85)
+            screenshot = tempCanvas
         } catch (err) {
             console.warn('[Polymorphic] Screenshot capture failed:', err)
         }
@@ -2460,13 +2451,10 @@ async function handleEditInPolymorphic() {
             description: 'Created with Foundry',
             ttlMinutes: 60
         }
-        if (screenshot) payload.screenshot = screenshot
         if (effectZip) payload.effects = [effectZip]
         
-        if (/\burl\b/.test(payload.dsl)) {
-            const { prepareImagesForShare } = await import('https://sharing.noisedeck.app/js/portableImages.js?v=images-20260929')
-            Object.assign(payload, await prepareImagesForShare(payload.dsl, renderer.images || []))
-        }
+        // Images and the screenshot go to the sharing service as files.
+        await attachShareFiles(payload, { images: renderer.images || [], screenshot })
 
         // Upload to sharing service
         const response = await fetch(SHARE_API_URL, {

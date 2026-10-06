@@ -9,6 +9,7 @@
 import { toast } from './toast.js'
 import { workspaceStore } from '../workspace/index.js'
 import { escapeHtml } from '../utils/html.js'
+import { attachShareFiles } from '../sharingLoader.js'
 
 const SHARE_API_URL = 'https://sharing.noisedeck.app/api/embed/shorten'
 
@@ -52,7 +53,11 @@ export class ShareModal {
         // Set preview image
         const previewImg = this.modal.querySelector('#share-preview-img')
         if (previewImg && this.screenshot) {
-            previewImg.src = this.screenshot
+            try {
+                previewImg.src = this.screenshot.toDataURL('image/jpeg', 0.85)
+            } catch (error) {
+                console.error('[ShareModal] Screenshot preview failed:', error)
+            }
         }
 
         // Animate in
@@ -171,7 +176,7 @@ export class ShareModal {
     /**
      * Capture screenshot from canvas
      * @private
-     * @returns {string|null} Data URL or null if no canvas
+     * @returns {HTMLCanvasElement|null} The 1200x630 screenshot canvas, or null if no canvas
      */
     _captureScreenshot() {
         const canvas = this.options?.canvas
@@ -208,7 +213,7 @@ export class ShareModal {
             
             ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, targetWidth, targetHeight)
             
-            return tempCanvas.toDataURL('image/jpeg', 0.85)
+            return tempCanvas
         } catch (error) {
             console.error('[ShareModal] Screenshot capture failed:', error)
             return null
@@ -266,10 +271,6 @@ export class ShareModal {
                 description: description || 'Created with Foundry'
             }
 
-            if (screenshot) {
-                payload.screenshot = screenshot
-            }
-
             if (effectZip) {
                 payload.effects = [effectZip]
             }
@@ -281,10 +282,8 @@ export class ShareModal {
                 hasEffects: !!effectZip
             })
 
-            if (/\burl\b/.test(payload.dsl)) {
-                const { prepareImagesForShare } = await import('https://sharing.noisedeck.app/js/portableImages.js?v=images-20260929')
-                Object.assign(payload, await prepareImagesForShare(payload.dsl, renderer?.images || []))
-            }
+            // Images and the screenshot go to the sharing service as files.
+            await attachShareFiles(payload, { images: renderer?.images || [], screenshot })
 
             const response = await fetch(SHARE_API_URL, {
                 method: 'POST',
