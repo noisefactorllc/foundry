@@ -137,6 +137,55 @@ test('Foundry shares images as files and reopens them from the sharing service',
         }
         const storedImage = id => readFile(join(imagesDir, id.slice(0, 2), id))
 
+        // The image records a page holds: each must hold its bytes as a Blob and no text.
+        const heldImages = (page, holder) => page.evaluate(holder => {
+            const images = holder === 'renderer' ? window.effectWorkspaceRenderer.images : window.effectWorkspace.workspaceStore.images
+            return images.map(image => ({ id: image.id, blob: image.blob instanceof Blob, type: image.blob?.type, size: image.blob?.size, text: 'dataUrl' in image || /base64|data:image|dataUrl/.test(JSON.stringify(image)) }))
+        }, holder)
+        async function expectBlobImages(page, ids, label) {
+            for (const holder of ['renderer', 'workspace']) {
+                const held = await heldImages(page, holder)
+                assert.deepEqual(held.map(image => image.id).sort(), [...ids].sort(), `${label}: ${holder} image ids`)
+                for (const image of held) assert.deepEqual([image.blob, image.type, image.text], [true, 'image/png', false], `${label}: ${holder} holds ${image.id} as a Blob`)
+            }
+        }
+        // The workspace saved in IndexedDB: its files, and its images as stored.
+        const savedWorkspace = page => page.evaluate(() => new Promise((resolve, reject) => {
+            const request = indexedDB.open('shade-workspace')
+            request.onerror = () => reject(request.error)
+            request.onsuccess = () => {
+                const db = request.result
+                const get = db.transaction('workspaces').objectStore('workspaces').get('current')
+                get.onerror = () => { db.close(); reject(get.error) }
+                get.onsuccess = () => {
+                    db.close()
+                    const data = get.result || {}
+                    resolve({
+                        files: Object.keys(data.files || {}).sort(),
+                        filesText: JSON.stringify(data.files || {}),
+                        images: (data.images || []).map(image => ({ id: image.id, blob: image.blob instanceof Blob, type: image.blob?.type, size: image.blob?.size, keys: Object.keys(image).sort() }))
+                    })
+                }
+            }
+        }))
+        async function expectSavedBlobImages(page, ids, label) {
+            // Autosave is debounced; poll the store until the images are written.
+            let saved
+            for (let i = 0; i < 100; i++) {
+                saved = await savedWorkspace(page)
+                if (saved.images.length === ids.length && !saved.files.includes('images.json')) break
+                await page.waitForTimeout(100)
+            }
+            console.log(`${label} saved workspace:`, JSON.stringify(saved))
+            assert.equal(saved.files.includes('images.json'), false, `${label}: no images.json file is saved`)
+            assert.doesNotMatch(saved.filesText, TEXT_IMAGE, `${label}: saved files hold no image text`)
+            assert.deepEqual(saved.images.map(image => image.id).sort(), [...ids].sort(), `${label}: saved image ids`)
+            for (const image of saved.images) {
+                assert.deepEqual([image.blob, image.type, image.keys], [true, 'image/png', ['blob', 'height', 'id', 'mimeType', 'width']], `${label}: ${image.id} is saved as a Blob`)
+            }
+            return saved
+        }
+
         async function chooseMenuItem(page, menu, item) {
             await page.getByText(menu, { exact: true }).first().click()
             await page.getByText(item, { exact: true }).first().click()
@@ -222,8 +271,7 @@ test('Foundry shares images as files and reopens them from the sharing service',
             const pixel = await waitForPixel(page, RED_PIXEL)
             console.log('reopened ?code= pixel:', JSON.stringify(pixel))
             assert.deepEqual(pixel, RED_PIXEL)
-            assert.deepEqual(await page.evaluate(() => window.effectWorkspaceRenderer.images.map(image => image.id)), [RED_ID])
-            assert.deepEqual(await page.evaluate(() => window.effectWorkspace.workspaceStore.images.map(image => image.id)), [RED_ID])
+            await expectBlobImages(page, [RED_ID], 'reopened ?code=')
 
             sent.length = 0
             const popup = receiver.waitForEvent('page')
@@ -293,8 +341,7 @@ test('Foundry shares images as files and reopens them from the sharing service',
                 const pixel = await waitForPixel(page, RED_PIXEL)
                 console.log(`${label} pixel:`, JSON.stringify(pixel))
                 assert.deepEqual(pixel, RED_PIXEL, label)
-                const ids = await page.evaluate(() => window.effectWorkspaceRenderer.images.map(image => image.id).sort())
-                assert.deepEqual(ids, label === 'legacy share' ? [RED_ID] : [RED_ID, BLUE_ID].sort(), label)
+                await expectBlobImages(page, label === 'legacy share' ? [RED_ID] : [RED_ID, BLUE_ID], label)
                 assert.deepEqual(errors, [], label)
             } finally { await context.close() }
         }
@@ -311,9 +358,64 @@ test('Foundry shares images as files and reopens them from the sharing service',
             console.log('import-from-url pixel:', JSON.stringify(pixel))
             assert.deepEqual(pixel, RED_PIXEL)
             assert.ok(sent.some(request => request.path === `/api/composition/${sharedCode}?images=files`))
-            assert.deepEqual(await page.evaluate(() => window.effectWorkspace.workspaceStore.images.map(image => image.id)), [RED_ID])
+            await expectBlobImages(page, [RED_ID], 'import from url')
+            const saved = await expectSavedBlobImages(page, [RED_ID], 'import from url')
+            assert.equal(saved.images[0].size, RED.length)
             assert.deepEqual(errors, [])
         } finally { await importer.close() }
+
+        // 7. A workspace saved before images were files lists its image as base64 text in an
+        //    images.json file. It opens with the image as a Blob, renders it, and is saved
+        //    again with the image as a Blob; sharing it sends the image as a file.
+        const earlier = await newFoundryContext()
+        try {
+            const seed = await earlier.newPage()
+            await seed.goto(`${FOUNDRY_ORIGIN}/health`)
+            await seed.evaluate(record => new Promise((resolve, reject) => {
+                const request = indexedDB.open('shade-workspace', 1)
+                request.onupgradeneeded = () => request.result.createObjectStore('workspaces', { keyPath: 'id' })
+                request.onerror = () => reject(request.error)
+                request.onsuccess = () => {
+                    const db = request.result
+                    const tx = db.transaction('workspaces', 'readwrite')
+                    tx.objectStore('workspaces').put(record)
+                    tx.oncomplete = () => { db.close(); resolve() }
+                    tx.onerror = () => { db.close(); reject(tx.error) }
+                }
+            }), {
+                id: 'current',
+                name: 'Earlier workspace',
+                files: {
+                    'dsl.txt': `search synth\nmedia(url: "image:${RED_ID}").write(o0)\nrender(o0)`,
+                    'images.json': JSON.stringify([{ id: RED_ID, dataUrl: `data:image/png;base64,${RED.toString('base64')}`, mimeType: 'image/png', width: 2, height: 2 }])
+                },
+                savedAt: Date.now()
+            })
+            await seed.close()
+
+            const { page, errors } = await openFoundry(earlier)
+            const pixel = await waitForPixel(page, RED_PIXEL)
+            console.log('earlier workspace pixel:', JSON.stringify(pixel))
+            assert.deepEqual(pixel, RED_PIXEL)
+            await expectBlobImages(page, [RED_ID], 'earlier workspace')
+            assert.equal(await page.evaluate(() => window.effectWorkspace.workspaceStore.hasFile('images.json')), false)
+            const saved = await expectSavedBlobImages(page, [RED_ID], 'earlier workspace')
+            assert.deepEqual(saved.files, ['dsl.txt'])
+
+            sent.length = 0
+            await chooseMenuItem(page, 'effect', 'share publicly...')
+            const shareResponse = page.waitForResponse(response => response.url().endsWith('/api/embed/shorten'))
+            await page.locator('#share-submit-btn').click()
+            const result = await (await shareResponse).json()
+            assert.equal(result.imageCount, 1)
+            const posts = await expectNoImageText('earlier workspace share')
+            const images = posts.filter(request => request.path === '/api/images')
+            assert.deepEqual(images.map(request => request.type), ['image/png', 'image/jpeg'])
+            assert.deepEqual(images[0].body, RED)
+            const { entry } = await stored(result.code)
+            assert.doesNotMatch(entry, TEXT_IMAGE)
+            assert.deepEqual(errors, [])
+        } finally { await earlier.close() }
     } finally {
         await browser?.close()
         await stopServer(foundry)

@@ -7,6 +7,11 @@
  * @module workspace/workspace-store
  */
 
+import { imageFileRecords, sameImages } from '../imageRecords.js'
+
+// The file earlier workspaces and exported ZIPs list their images in.
+const IMAGES_FILE = 'images.json'
+
 /**
  * @typedef {Object} WorkspaceState
  * @property {string} name - Effect name
@@ -17,6 +22,7 @@
  * @typedef {Object} HistoryEntry
  * @property {string} label - Description of the change
  * @property {Map<string, string>} files - Snapshot of all files
+ * @property {Array<object>} images - Snapshot of the image records
  * @property {string} [dsl] - DSL source at this checkpoint
  * @property {object} [paramState] - ProgramState snapshot (serialized)
  * @property {number} timestamp - When the change was made
@@ -42,6 +48,9 @@ export class WorkspaceStore extends EventTarget {
         /** @type {Map<string, string>} */
         this.files = new Map()
 
+        /** @type {Array<object>} Image records; see `images` */
+        this._images = []
+
         /** @type {HistoryEntry[]} */
         this.history = []
 
@@ -56,22 +65,47 @@ export class WorkspaceStore extends EventTarget {
     // File Operations
     // =========================================================================
 
-    /** Image assets use the same file, history, IndexedDB, and ZIP lifecycle as the DSL. */
+    /**
+     * The images the program names as `image:<id>`, as `{ id, blob, mimeType,
+     * width, height }` records that hold their bytes as Blobs. They share the
+     * DSL's history and are saved with the workspace in IndexedDB as Blobs.
+     * Assigned `{ id, dataUrl }` records, as earlier workspaces and shares
+     * carry, are read into Blob records.
+     * @type {Array<{id: string, blob: Blob, mimeType?: string, width?: number, height?: number}>}
+     */
     get images() {
-        const content = this.getFile('images.json')
-        if (!content) return []
-        const images = JSON.parse(content)
-        if (!Array.isArray(images)) throw new Error('Invalid workspace images')
-        return images
+        return this._images
     }
 
     set images(images) {
-        if (!images.length) {
-            this.deleteFile('images.json')
-            return
+        const next = imageFileRecords(images)
+        if (sameImages(next, this._images)) return
+        this._images = next
+        this._dispatchChange('images-set', { count: next.length })
+    }
+
+    /**
+     * Take the images that an earlier workspace or an exported ZIP lists in an
+     * `images.json` file: the file is removed, and its `{ id, dataUrl }`
+     * records are returned as Blob records. Images are never kept as a file.
+     * @returns {Array<object>} The Blob records; empty when there is no file
+     */
+    takeImagesFile() {
+        const content = this.files.get(IMAGES_FILE)
+        if (content === undefined) return []
+        this.files.delete(IMAGES_FILE)
+        let listed
+        try {
+            listed = JSON.parse(content)
+        } catch (error) {
+            console.warn('[Workspace] images.json was not loaded:', error)
+            return []
         }
-        const content = JSON.stringify(images)
-        if (content !== this.getFile('images.json')) this.setFile('images.json', content)
+        if (!Array.isArray(listed)) {
+            console.warn('[Workspace] images.json was not loaded: not a list of images')
+            return []
+        }
+        return imageFileRecords(listed)
     }
 
     /**
@@ -139,13 +173,17 @@ export class WorkspaceStore extends EventTarget {
      * Load files from an object
      * @param {Object<string, string>} obj - Files object
      * @param {string} [name] - Effect name
+     * @param {Array<object>} [images] - Image records; when absent, the images
+     *   an earlier workspace lists in `images.json` are read into Blob records
      */
-    fromObject(obj, name = '') {
+    fromObject(obj, name = '', images) {
         this.files.clear()
         this.name = name
         for (const [path, content] of Object.entries(obj)) {
             this.files.set(path, content)
         }
+        const listed = this.takeImagesFile()
+        this._images = images === undefined ? listed : imageFileRecords(images)
         // Loading a different effect must start a fresh history, exactly like
         // clear(). Otherwise the previous effect's checkpoints survive and an
         // undo() would restore THAT effect's files over the just-loaded one
@@ -161,6 +199,7 @@ export class WorkspaceStore extends EventTarget {
     clear() {
         this.name = ''
         this.files.clear()
+        this._images = []
         this.history = []
         this.historyIndex = -1
         this._dispatchChange('clear', {})
@@ -189,10 +228,12 @@ export class WorkspaceStore extends EventTarget {
             this.history = this.history.slice(0, this.historyIndex + 1)
         }
 
-        // Add new entry with optional DSL and param state
+        // Add new entry with optional DSL and param state. Image records are
+        // never changed in place, so the list is its own snapshot.
         this.history.push({
             label,
             files: snapshot,
+            images: this._images,
             dsl: options.dsl || null,
             paramState: options.paramState || null,
             timestamp: Date.now()
@@ -281,6 +322,7 @@ export class WorkspaceStore extends EventTarget {
         for (const [path, content] of entry.files) {
             this.files.set(path, content)
         }
+        this._images = entry.images || []
 
         // Include DSL and param state in restore event so listeners can use them
         this._dispatchChange('restore', { 

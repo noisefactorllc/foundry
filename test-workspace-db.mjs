@@ -91,6 +91,80 @@ if (rt.foundAfterDelete === false) ok('deleteWorkspace removes the workspace')
 else fail('workspace still present after delete')
 
 // =============================================================================
+console.log('Images are saved as Blobs; an earlier base64 images.json is rewritten as Blobs')
+// =============================================================================
+const img = await page.evaluate(async () => {
+    const db = await import('/js/workspace/workspace-db.js')
+    const { WorkspaceStore } = await import('/js/workspace/workspace-store.js')
+    const TEXT = /base64|data:image|dataUrl/
+    const raw = async (id) => {
+        const opened = await new Promise((resolve, reject) => {
+            const request = indexedDB.open('shade-workspace', 1)
+            request.onsuccess = () => resolve(request.result)
+            request.onerror = () => reject(request.error)
+        })
+        try {
+            return await new Promise((resolve, reject) => {
+                const tx = opened.transaction('workspaces', 'readwrite')
+                const store = tx.objectStore('workspaces')
+                if (typeof id === 'object') { store.put(id); tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); return }
+                const get = store.get(id)
+                get.onsuccess = () => resolve(get.result)
+                get.onerror = () => reject(get.error)
+            })
+        } finally { opened.close() }
+    }
+    // A 1x1 PNG.
+    const bytes = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=='), c => c.charCodeAt(0))
+    const id = 'f'.repeat(64)
+    const blob = new Blob([bytes], { type: 'image/png' })
+
+    const store = new WorkspaceStore()
+    store.name = 'Image Effect'
+    store.setFile('dsl.txt', `search synth\nmedia(url: "image:${id}").write(o0)`)
+    store.images = [{ id, blob, mimeType: 'image/png', width: 1, height: 1 }]
+    await db.saveWorkspace(store, 'test-images')
+    const record = await raw('test-images')
+    const loaded = new WorkspaceStore()
+    await db.loadWorkspace(loaded, 'test-images')
+    const loadedBytes = [...new Uint8Array(await loaded.images[0].blob.arrayBuffer())]
+
+    // An earlier record: the image listed as base64 text in images.json.
+    const dataUrl = `data:image/png;base64,${btoa(String.fromCharCode(...bytes))}`
+    await raw({ id: 'test-earlier', name: 'Earlier', files: { 'dsl.txt': 'x', 'images.json': JSON.stringify([{ id, dataUrl, mimeType: 'image/png', width: 1, height: 1 }]) }, savedAt: 1 })
+    const earlier = new WorkspaceStore()
+    await db.loadWorkspace(earlier, 'test-earlier')
+    const rewritten = await raw('test-earlier')
+    const earlierBytes = [...new Uint8Array(await earlier.images[0].blob.arrayBuffer())]
+    await db.deleteWorkspace('test-images')
+    await db.deleteWorkspace('test-earlier')
+    return {
+        savedBlob: record.images.length === 1 && record.images[0].blob instanceof Blob,
+        savedText: TEXT.test(JSON.stringify(record)) || 'images.json' in record.files,
+        loadedBlob: loaded.images.length === 1 && loaded.images[0].blob instanceof Blob && !('dataUrl' in loaded.images[0]),
+        loadedBytesMatch: loadedBytes.join() === [...bytes].join(),
+        earlierBlob: earlier.images.length === 1 && earlier.images[0].blob instanceof Blob && !('dataUrl' in earlier.images[0]),
+        earlierBytesMatch: earlierBytes.join() === [...bytes].join(),
+        earlierFiles: earlier.listFiles(),
+        rewrittenBlob: rewritten.images?.length === 1 && rewritten.images[0].blob instanceof Blob,
+        rewrittenText: TEXT.test(JSON.stringify(rewritten)) || 'images.json' in rewritten.files,
+        rewrittenKept: rewritten.name === 'Earlier' && rewritten.savedAt === 1 && rewritten.files['dsl.txt'] === 'x'
+    }
+})
+
+if (img.savedBlob && !img.savedText) ok('images are saved as Blobs, with no image text')
+else fail(`saved images not Blobs (blob=${img.savedBlob}, text=${img.savedText})`)
+
+if (img.loadedBlob && img.loadedBytesMatch) ok('saved images load back as Blob records with the same bytes')
+else fail(`loaded images wrong (blob=${img.loadedBlob}, bytes=${img.loadedBytesMatch})`)
+
+if (img.earlierBlob && img.earlierBytesMatch && img.earlierFiles.join() === 'dsl.txt') ok('an earlier base64 images.json loads as Blob records')
+else fail(`earlier images wrong (blob=${img.earlierBlob}, bytes=${img.earlierBytesMatch}, files=${img.earlierFiles})`)
+
+if (img.rewrittenBlob && !img.rewrittenText && img.rewrittenKept) ok('the earlier saved workspace is rewritten with Blobs and no image text')
+else fail(`earlier workspace not rewritten (blob=${img.rewrittenBlob}, text=${img.rewrittenText}, kept=${img.rewrittenKept})`)
+
+// =============================================================================
 console.log('Migration safety (no connection leak / no upgrade hang)')
 // =============================================================================
 const mig = await page.evaluate(async () => {

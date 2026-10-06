@@ -17,7 +17,7 @@ const start = source.indexOf('async function handleExport(')
 const end = source.indexOf('// Edit in other apps')
 assert.ok(start >= 0 && end > start, 'handleExport source slice found')
 
-function runExport({ files, dsl, name = 'workspace' }) {
+function runExport({ files, dsl, name = 'workspace', images = [] }) {
     const archives = []
     class FakeZip {
         constructor() { this.entries = new Map() }
@@ -29,13 +29,14 @@ function runExport({ files, dsl, name = 'workspace' }) {
     }
     const workspaceStore = {
         name,
-        images: (JSON.parse(files['images.json'] || '[]')),
+        images,
         toObject: () => ({ ...files })
     }
     const anchor = { click: () => {} }
     const context = vm.createContext({
         console,
         Blob,
+        btoa,
         URL: { createObjectURL: () => 'blob:fake', revokeObjectURL: () => {} },
         document: {
             createElement: () => anchor,
@@ -57,14 +58,22 @@ test('export includes the program for a DSL-only workspace', { timeout: 3000 }, 
 })
 
 test('export keeps the image-composition layout (effect.dsl + images.json)', { timeout: 3000 }, async () => {
+    // The workspace holds its images as Blobs; the exported archive lists them
+    // in images.json, byte-for-byte the layout earlier exports carried and
+    // ZIP import reads.
+    const bytes = new Uint8Array([1, 2, 3, 4])
+    const image = { id: 'abc', blob: new Blob([bytes], { type: 'image/png' }), mimeType: 'image/png', width: 2, height: 2 }
     const dsl = 'search synth\nmedia(url: "image:abc").write(o0)'
-    const files = {
-        'dsl.txt': dsl,
-        'images.json': JSON.stringify([{ id: 'abc', dataUrl: 'data:image/png;base64,AQIDBA==' }])
-    }
-    const zip = await runExport({ files, dsl })
+    const files = { 'dsl.txt': dsl }
+    const zip = await runExport({ files, dsl, images: [image] })
     assert.equal(zip.entries.get('effect.dsl'), dsl)
-    assert.equal(zip.entries.get('images.json'), files['images.json'])
+    assert.equal(zip.entries.get('images.json'), JSON.stringify([{ id: 'abc', dataUrl: 'data:image/png;base64,AQIDBA==', mimeType: 'image/png', width: 2, height: 2 }]))
+})
+
+test('export without images writes no images.json', { timeout: 3000 }, async () => {
+    const dsl = 'search synth\n\nnoise().write(o0)\n\nrender(o0)'
+    const zip = await runExport({ files: { 'dsl.txt': dsl }, dsl })
+    assert.equal(zip.entries.has('images.json'), false)
 })
 
 test('export injects the current DSL as defaultProgram and keeps effect.dsl', { timeout: 3000 }, async () => {

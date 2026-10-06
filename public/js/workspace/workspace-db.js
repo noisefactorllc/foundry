@@ -98,6 +98,18 @@ function withStore(mode, run) {
 }
 
 /**
+ * The image records to store with a workspace: each holds its bytes as a
+ * Blob, which IndexedDB stores as a file. No image is stored as text.
+ * @param {Array<object>} [images]
+ * @returns {Array<{id: string, blob: Blob, mimeType?: string, width?: number, height?: number}>}
+ */
+function storedImages(images) {
+    return (images || [])
+        .filter(image => image?.blob instanceof Blob)
+        .map(({ id, blob, mimeType, width, height }) => ({ id, blob, mimeType, width, height }))
+}
+
+/**
  * Save workspace to IndexedDB
  * @param {import('./workspace-store.js').WorkspaceStore} store - Workspace store
  * @param {string} [id='current'] - Workspace ID
@@ -114,6 +126,7 @@ export async function saveWorkspace(store, id = CURRENT_KEY) {
         id,
         name: store.name,
         files: filesObj,
+        images: storedImages(store.images),
         savedAt: Date.now()
     }
 
@@ -124,6 +137,11 @@ export async function saveWorkspace(store, id = CURRENT_KEY) {
 
 /**
  * Load workspace from IndexedDB
+ *
+ * A workspace saved before images were files lists its images as base64 text
+ * in an `images.json` file. Its images are read into Blob records, and the
+ * saved workspace is rewritten with them as Blobs.
+ *
  * @param {import('./workspace-store.js').WorkspaceStore} store - Workspace store
  * @param {string} [id='current'] - Workspace ID
  * @returns {Promise<boolean>} Whether a workspace was loaded
@@ -138,7 +156,17 @@ export async function loadWorkspace(store, id = CURRENT_KEY) {
         return false
     }
 
-    store.fromObject(data.files, data.name)
+    store.fromObject(data.files, data.name, data.images)
+    if (data.files && Object.hasOwn(data.files, 'images.json')) {
+        const { 'images.json': _imagesFile, ...files } = data.files
+        try {
+            await withStore('readwrite', (objectStore) => {
+                objectStore.put({ ...data, files, images: storedImages(store.images) })
+            })
+        } catch (err) {
+            console.warn('[WorkspaceDB] Could not rewrite the workspace images as files:', err)
+        }
+    }
     return true
 }
 

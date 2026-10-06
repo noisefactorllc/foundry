@@ -1,21 +1,73 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { deflateSync } from 'node:zlib'
 import vm from 'node:vm'
 
 // The sharing service's image helpers, stubbed per test through globalThis.portableImages.
-const portableImagesStub = ['prepareImage', 'prepareImagesForShare', 'imageToBlob', 'replaceMediaUrls']
+const portableImagesStub = ['prepareImageFile', 'prepareImagesForShare', 'imageToBlob', 'replaceMediaUrls']
     .map(name => `export const ${name} = (...args) => globalThis.portableImages.${name}(...args)`).join('\n')
-const source = (await readFile(new URL('../public/js/sharingLoader.js', import.meta.url), 'utf8'))
+const sharingLoaderSource = await readFile(new URL('../public/js/sharingLoader.js', import.meta.url), 'utf8')
+const HELPER_URL = "'https://sharing.noisedeck.app/js/portableImages.js?v=images-20261006'"
+assert.equal(sharingLoaderSource.split(HELPER_URL).length, 2, 'sharingLoader.js names the helper URL once')
+const source = sharingLoaderSource
     .replace(/import\s*\{[\s\S]*?\}\s*from '\.\/noisemaker\/bundle.js'/, 'const Effect = class {}; const registerEffect = () => {}; const registerOp = () => {}; const registerStarterOps = () => {}; const mergeIntoEnums = () => {}')
-    .replaceAll("'https://sharing.noisedeck.app/js/portableImages.js?v=images-20260929'", `'data:text/javascript;base64,${Buffer.from(portableImagesStub).toString('base64')}'`)
+    .replaceAll(HELPER_URL, `'data:text/javascript;base64,${Buffer.from(portableImagesStub).toString('base64')}'`)
 const loader = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'))
-test('composition imports retain image bytes for rendering and reshare', async t => {
+
+// The real sharing image helpers (SHARING_REPO, default ../../sharing).
+const SHARING = process.env.SHARING_REPO || fileURLToPath(new URL('../../sharing', import.meta.url))
+const helper = await import(pathToFileURL(`${SHARING}/public/js/portableImages.js`).href)
+const { imageFileRecords } = await import('../public/js/imageRecords.js')
+
+/** A 2x2 PNG of one color, its SHA-256 id, and the base64 data URL earlier records carried. */
+function png(red, green, blue) {
+    const chunk = (type, data) => {
+        const body = Buffer.concat([Buffer.from(type), data])
+        let crc = 0xffffffff
+        for (const byte of body) { crc ^= byte; for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ ((crc & 1) ? 0xedb88320 : 0) }
+        const length = Buffer.alloc(4), checksum = Buffer.alloc(4)
+        length.writeUInt32BE(data.length); checksum.writeUInt32BE((crc ^ 0xffffffff) >>> 0)
+        return Buffer.concat([length, body, checksum])
+    }
+    const header = Buffer.alloc(13)
+    header.writeUInt32BE(2, 0); header.writeUInt32BE(2, 4); header[8] = 8; header[9] = 6
+    const row = [0, red, green, blue, 255, red, green, blue, 255]
+    const bytes = Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', header), chunk('IDAT', deflateSync(Buffer.from([...row, ...row]))), chunk('IEND', Buffer.alloc(0))])
+    return { bytes, id: createHash('sha256').update(bytes).digest('hex'), dataUrl: `data:image/png;base64,${bytes.toString('base64')}` }
+}
+const RED_PNG = png(255, 0, 0), BLUE_PNG = png(0, 0, 255)
+const fileRecord = ({ id, bytes }) => ({ id, blob: new Blob([bytes], { type: 'image/png' }), mimeType: 'image/png', width: 2, height: 2 })
+
+/** Assert that every record holds its image bytes as a Blob and no text. */
+async function assertBlobRecords(images, expected) {
+    assert.deepEqual(images.map(image => image.id), expected.map(image => image.id))
+    for (const [index, image] of images.entries()) {
+        assert.ok(image.blob instanceof Blob, `${image.id} holds a Blob`)
+        assert.equal('dataUrl' in image, false, `${image.id} has no dataUrl`)
+        assert.deepEqual(Buffer.from(await image.blob.arrayBuffer()), expected[index].bytes)
+        assert.equal(image.blob.type, 'image/png')
+    }
+    assert.doesNotMatch(JSON.stringify(images), /base64|data:image|dataUrl/)
+}
+
+test('composition imports hold image bytes as Blobs, reading older base64 records into Blobs', async t => {
     const previous = globalThis.fetch
-    const images = [{ id: 'a'.repeat(64), dataUrl: 'data:image/png;base64,AAAA' }]
-    globalThis.fetch = async () => ({ ok: true, json: async () => ({ code: 'abcdef', dsl: 'media().write(o0)', images }) })
-    t.after(() => { globalThis.fetch = previous })
-    assert.deepEqual((await loader.loadFromCode('abcdef')).images, images)
+    const listed = [
+        { id: RED_PNG.id, dataUrl: RED_PNG.dataUrl, mimeType: 'image/png', width: 2, height: 2 },
+        { id: BLUE_PNG.id, dataUrl: RED_PNG.dataUrl }
+    ]
+    globalThis.fetch = async () => ({ ok: true, json: async () => ({ code: 'abcdef', dsl: 'media().write(o0)', images: listed }) })
+    globalThis.portableImages = helper
+    const warn = console.warn
+    const warnings = []
+    console.warn = message => warnings.push(message)
+    t.after(() => { globalThis.fetch = previous; console.warn = warn; delete globalThis.portableImages })
+    // The record whose bytes do not match its id is left out.
+    await assertBlobRecords((await loader.loadFromCode('abcdef')).images, [RED_PNG])
+    assert.deepEqual(warnings, [`Shared image ${BLUE_PNG.id} was not loaded:`])
 })
 
 const { WorkspaceStore } = await import('../public/js/workspace/workspace-store.js')
@@ -24,12 +76,13 @@ test('URL import checkpoints the composition DSL and images together after clear
     const handler = app.match(/async function handleLoadFromUrl\(composition\) \{[\s\S]*?\n\}/)[0]
     const store = new WorkspaceStore()
     store.setFile('dsl.txt', 'old program')
-    store.images = [{ id: 'old' }]
-    const images = [{ id: 'a'.repeat(64), dataUrl: 'data:image/png;base64,AQIDBA==' }]
+    store.images = [fileRecord(BLUE_PNG)]
+    const images = [fileRecord(RED_PNG)]
     const dsl = `search synth\nmedia(url: "image:${images[0].id}").write(o0)`
     let compilations = 0
+    const renderer = {}
     const context = vm.createContext({
-        renderer: {}, workspaceStore: store, dslEditor: {}, canvasEditor: null, fileBrowser: null, console,
+        renderer, workspaceStore: store, dslEditor: {}, canvasEditor: null, fileBrowser: null, console,
         writePortableEffectToWorkspace: effect => store.setFile('definition.json', JSON.stringify(effect)),
         setAgentStatus() {}, hideCompilerError() {}, toast: { success() {} },
         recompileFromEditor: async () => {
@@ -41,29 +94,84 @@ test('URL import checkpoints the composition DSL and images together after clear
     })
     await vm.runInContext(`(${handler})`, context)({ dsl, images, rawEffects: [{ name: 'imageEffect' }] })
     assert.equal(compilations, 1)
+    assert.equal(store.hasFile('images.json'), false, 'images are not kept as a file')
     store.setFile('dsl.txt', 'replacement')
     store.images = []
     store.checkpoint('replacement')
     store.undo()
     assert.equal(store.getFile('dsl.txt'), dsl)
     assert.deepEqual(store.images, images)
+    await assertBlobRecords(store.images, [RED_PNG])
 })
 
-test('workspace save and history retain original images with the DSL', () => {
-    const images = [{ id: 'a'.repeat(64), dataUrl: 'data:image/png;base64,AQIDBA==' }]
+test('workspace save and history retain original images with the DSL', async () => {
+    const images = [fileRecord(RED_PNG)]
     const dsl = `search synth\nmedia(url: "image:${images[0].id}").write(o0)`
     const store = new WorkspaceStore()
+    const changes = []
+    store.onChange(detail => changes.push(detail.type))
     store.setFile('dsl.txt', dsl)
     store.images = images
+    // Assigning the same records again is not a change.
+    store.images = [...images]
+    assert.deepEqual(changes, ['file-set', 'images-set'])
     store.checkpoint('with image')
+    // The files hold no image; the images travel beside them.
+    assert.deepEqual(Object.keys(store.toObject()), ['dsl.txt'])
     const reopened = new WorkspaceStore()
-    reopened.fromObject(JSON.parse(JSON.stringify(store.toObject())))
+    reopened.fromObject(JSON.parse(JSON.stringify(store.toObject())), '', store.images)
     assert.equal(reopened.getFile('dsl.txt'), dsl)
     assert.deepEqual(reopened.images, images)
     store.images = []
     store.checkpoint('cleared')
     store.undo()
     assert.deepEqual(store.images, images)
+    store.clear()
+    assert.deepEqual(store.images, [])
+})
+
+test('an earlier workspace that lists its images as base64 in images.json loads them as Blobs', async () => {
+    const warn = console.warn
+    const warnings = []
+    console.warn = message => warnings.push(message)
+    try {
+        const files = {
+            'dsl.txt': `search synth\nmedia(url: "image:${RED_PNG.id}").write(o0)`,
+            'images.json': JSON.stringify([
+                { id: RED_PNG.id, dataUrl: RED_PNG.dataUrl, mimeType: 'image/png', width: 2, height: 2 },
+                { id: 'd'.repeat(64), dataUrl: 'data:image/svg+xml;base64,PHN2Zy8+' }
+            ])
+        }
+        const store = new WorkspaceStore()
+        store.fromObject(files, 'earlier')
+        assert.equal(store.hasFile('images.json'), false, 'the images.json file is taken out of the files')
+        assert.deepEqual(store.listFiles(), ['dsl.txt'])
+        await assertBlobRecords(store.images, [RED_PNG])
+        assert.deepEqual([store.images[0].mimeType, store.images[0].width, store.images[0].height], ['image/png', 2, 2])
+        // An image that cannot be read as a PNG, JPEG, GIF or WebP is left out, not kept as text.
+        assert.deepEqual(warnings, [`Image ${'d'.repeat(64)} was not loaded:`])
+
+        // A ZIP import puts images.json among the files; the import takes it the same way.
+        const imported = new WorkspaceStore()
+        imported.files.set('images.json', files['images.json'])
+        imported.images = imported.takeImagesFile()
+        assert.equal(imported.hasFile('images.json'), false)
+        await assertBlobRecords(imported.images, [RED_PNG])
+
+        // An unreadable images.json loads no images instead of failing the load.
+        const broken = new WorkspaceStore()
+        broken.fromObject({ 'images.json': '{not json' })
+        assert.deepEqual(broken.images, [])
+        assert.equal(broken.hasFile('images.json'), false)
+    } finally { console.warn = warn }
+})
+
+test('image records: earlier base64 records are read into Blobs and Blob records pass through', async () => {
+    const record = fileRecord(BLUE_PNG)
+    const records = imageFileRecords([record, { id: RED_PNG.id, dataUrl: RED_PNG.dataUrl, width: 2, height: 2 }, null])
+    assert.equal(records[0], record)
+    await assertBlobRecords(records, [BLUE_PNG, RED_PNG])
+    assert.deepEqual(imageFileRecords(undefined), [])
 })
 
 test('workspace ZIP import preserves image assets and composition DSL', async t => {
@@ -86,6 +194,10 @@ test('workspace ZIP import preserves image assets and composition DSL', async t 
     await dialog._processFile({})
     assert.equal(dialog.pendingZip?.files['images.json'], files['effect/images.json'])
     assert.equal(dialog.pendingZip?.files['effect.dsl'], files['effect/effect.dsl'])
+    // The workspace takes the listed images as Blob records when the ZIP is imported.
+    const app = await readFile(new URL('../public/js/app.js', import.meta.url), 'utf8')
+    const onImport = app.slice(app.indexOf('importEffectDialog.onEffectImport('), app.indexOf('// Get DSL from definition\'s defaultProgram'))
+    assert.match(onImport, /workspaceStore\.images = workspaceStore\.takeImagesFile\(\)/)
 })
 
 // Sharing images as files: no image is sent or stored as base64 text.
@@ -113,11 +225,15 @@ function sharingService(t, { ids = {}, fail = {} } = {}) {
 
 function portableImages(overrides = {}) {
     globalThis.portableImages = {
-        prepareImagesForShare: async dsl => ({
-            dsl: dsl.replace('https://images.example/red.png', `image:${RED_ID}`),
-            images: [{ id: RED_ID, dataUrl: 'data:image/png;base64,iVBORw==', mimeType: 'image/png', width: 2, height: 2 }]
-        }),
-        imageToBlob: () => new Blob([PNG], { type: 'image/png' }),
+        prepareImagesForShare: async (dsl, images, options) => {
+            // Shares ask for every prepared image as a Blob record.
+            assert.deepEqual(options, { files: true })
+            return {
+                dsl: dsl.replace('https://images.example/red.png', `image:${RED_ID}`),
+                images: [{ id: RED_ID, blob: new Blob([PNG], { type: 'image/png' }), mimeType: 'image/png', width: 2, height: 2 }]
+            }
+        },
+        imageToBlob: () => { throw new Error('prepared images already hold Blobs') },
         replaceMediaUrls: (dsl, replace) => dsl.replace(/"(image:[a-f0-9]{64})"/g, (match, url) => JSON.stringify(replace(url, 0) ?? url)),
         ...overrides
     }
@@ -149,7 +265,7 @@ test('image references keep their ids when the service returns the same ids', as
     sharingService(t, { ids: { 'image/png': RED_ID, 'image/jpeg': SHOT_ID } })
     portableImages({ replaceMediaUrls: () => { throw new Error('nothing to rename') } })
     const payload = { dsl: `search synth\nmedia(url: "image:${RED_ID}").write(o0)\nrender(o0)` }
-    await loader.attachShareFiles(payload, { images: [{ id: RED_ID, dataUrl: 'data:image/png;base64,iVBORw==' }], screenshot: jpegCanvas })
+    await loader.attachShareFiles(payload, { images: [{ id: RED_ID, blob: new Blob([PNG], { type: 'image/png' }) }], screenshot: jpegCanvas })
     assert.equal(payload.dsl, `search synth\nmedia(url: "image:${RED_ID}").write(o0)\nrender(o0)`)
     assert.doesNotMatch(JSON.stringify(payload), TEXT_IMAGE)
 })
@@ -206,7 +322,8 @@ test('opening a share asks for image files and loads each one checked against it
         if (String(url).includes('/api/composition/')) return new Response(JSON.stringify({ code: 'abcdef', dsl: `media(url: "image:${RED_ID}").write(o0)`, images: listed }))
         return files[url]
     }
-    globalThis.portableImages = { prepareImage: async blob => ({ id: RED_ID, dataUrl: 'data:image/png;base64,iVBORw==', mimeType: blob.type, width: 2, height: 2 }) }
+    const prepared = []
+    globalThis.portableImages = { prepareImageFile: async blob => (prepared.push(blob), { id: RED_ID, blob, mimeType: blob.type, width: 2, height: 2 }) }
     const warn = console.warn
     const warnings = []
     console.warn = (...args) => warnings.push(args[0])
@@ -215,9 +332,32 @@ test('opening a share asks for image files and loads each one checked against it
     const composition = await loader.loadFromCode('abcdef')
     assert.equal(fetched[0], 'https://sharing.noisedeck.app/api/composition/abcdef?images=files')
     // The red file matches its id; a file whose bytes have another id, and a missing file, are left out.
-    assert.deepEqual(composition.images, [{ id: RED_ID, dataUrl: 'data:image/png;base64,iVBORw==', mimeType: 'image/png', width: 2, height: 2 }])
+    assert.deepEqual(composition.images, [{ id: RED_ID, blob: prepared[0], mimeType: 'image/png', width: 2, height: 2 }])
+    assert.ok(composition.images[0].blob instanceof Blob)
+    assert.deepEqual(new Uint8Array(await composition.images[0].blob.arrayBuffer()), PNG)
     assert.equal(composition.dsl, `media(url: "image:${RED_ID}").write(o0)`)
     assert.equal(warnings.length, 2)
+})
+
+test('a share sends inline and earlier base64 images as files, with the real sharing helpers', async t => {
+    const requests = sharingService(t, { ids: { 'image/png': undefined, 'image/jpeg': SHOT_ID } })
+    // The fake service answers each upload with the SHA-256 of its bytes, as the service does.
+    const service = globalThis.fetch
+    globalThis.fetch = async (url, init = {}) => {
+        const response = await service(url, init)
+        if (!String(url).endsWith('/api/images') || init.headers?.['Content-Type'] !== 'image/png') return response
+        return new Response(JSON.stringify({ id: createHash('sha256').update(new Uint8Array(await init.body.arrayBuffer())).digest('hex') }), { status: 201 })
+    }
+    globalThis.portableImages = helper
+    const payload = { dsl: `search synth\nmedia(url: "${RED_PNG.dataUrl}").write(o0)\nmedia(url: "image:${BLUE_PNG.id}").write(o1)\nrender(o0)` }
+    // The renderer's images, as an earlier record that carries base64 text.
+    await loader.attachShareFiles(payload, { images: [{ id: BLUE_PNG.id, dataUrl: BLUE_PNG.dataUrl }], screenshot: jpegCanvas })
+    const uploads = requests.filter(request => request.type === 'image/png')
+    assert.deepEqual(await Promise.all(uploads.map(async request => Buffer.from(await request.body.arrayBuffer()))), [RED_PNG.bytes, BLUE_PNG.bytes])
+    for (const request of requests) assert.ok(request.body instanceof Blob, 'every upload body is a file')
+    assert.equal(payload.dsl, `search synth\nmedia(url: "image:${RED_PNG.id}").write(o0)\nmedia(url: "image:${BLUE_PNG.id}").write(o1)\nrender(o0)`)
+    assert.equal(payload.screenshot, SHOT_ID)
+    assert.doesNotMatch(JSON.stringify(payload), TEXT_IMAGE)
 })
 
 test('every share request goes through the file upload helper', async () => {

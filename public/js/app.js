@@ -384,6 +384,9 @@ importEffectDialog.onEffectImport(async ({ name, files }) => {
             workspaceStore.files.set(path, content)
         }
     }
+    // An exported workspace lists its images in images.json; the workspace
+    // holds them as Blob records, not as a file.
+    workspaceStore.images = workspaceStore.takeImagesFile()
 
     // Get DSL from definition's defaultProgram, or generate one
     let dsl = workspaceStore.getFile('dsl.txt') || workspaceStore.getFile('effect.dsl')
@@ -1888,6 +1891,7 @@ async function handleExport() {
             }
             zip.file(path, content)
         }
+        if (workspaceStore.images.length) zip.file('images.json', await exportedImagesFile(workspaceStore.images))
         
         const blob = await zip.generateAsync({ type: 'blob' })
         const url = URL.createObjectURL(blob)
@@ -1903,6 +1907,26 @@ async function handleExport() {
     } catch (error) {
         toast.error(`Export failed: ${error.message}`)
     }
+}
+
+/**
+ * The images.json file an exported ZIP lists the workspace's images in, in
+ * the layout Foundry has always exported and imports: { id, dataUrl,
+ * mimeType, width, height } records. The ZIP is a local download; the
+ * workspace itself holds and saves its images as Blobs.
+ * @param {Array<{id: string, blob: Blob, mimeType?: string, width?: number, height?: number}>} images
+ * @returns {Promise<string>}
+ */
+async function exportedImagesFile(images) {
+    const listed = []
+    for (const { id, blob, mimeType, width, height } of images) {
+        if (!(blob instanceof Blob)) continue
+        const bytes = new Uint8Array(await blob.arrayBuffer())
+        let raw = ''
+        for (let start = 0; start < bytes.length; start += 32768) raw += String.fromCharCode(...bytes.subarray(start, start + 32768))
+        listed.push({ id, dataUrl: `data:${blob.type};base64,${btoa(raw)}`, mimeType, width, height })
+    }
+    return JSON.stringify(listed)
 }
 
 // Edit in other apps

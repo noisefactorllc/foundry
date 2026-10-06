@@ -9,6 +9,8 @@
  */
 
 import { CanvasRenderer, ProgramState, extractEffectNamesFromDsl, extractEffectsFromDsl, getEffect, getAllEffects } from './bundle.js'
+import { loadImageTools } from '../sharingLoader.js'
+import { imageFileRecords } from '../imageRecords.js'
 
 /**
  * ShadeRenderer - Main rendering class for Shade
@@ -67,7 +69,7 @@ export class ShadeRenderer {
         // State
         this._initialized = false
         this._currentDsl = '' // The ONE canonical DSL source
-        this.images = []
+        this._images = []
         this._imageTools = null
         this._imageDimensions = []
         this._lastGoodDsl = '' // Last successfully compiled DSL (for recovery)
@@ -90,6 +92,20 @@ export class ShadeRenderer {
     // =========================================================================
     // Public Getters
     // =========================================================================
+
+    /**
+     * The images programs name as `image:<id>`, as `{ id, blob, ... }` records
+     * that hold their bytes as Blobs. A list of `{ id, dataUrl }` records, as
+     * earlier workspaces and shares carry, is read into Blob records when it
+     * is assigned.
+     */
+    get images() {
+        return this._images
+    }
+
+    set images(images) {
+        this._images = imageFileRecords(images)
+    }
 
     /** @returns {HTMLCanvasElement} Current canvas element (may change after backend switch) */
     get canvas() {
@@ -315,7 +331,7 @@ export class ShadeRenderer {
         }
 
         try {
-            if (/\burl\b/.test(dsl)) this._imageTools = await import('https://sharing.noisedeck.app/js/portableImages.js?v=images-20260929')
+            if (/\burl\b/.test(dsl)) this._imageTools = await loadImageTools()
             const engineDsl = this._imageTools ? this._imageTools.stripMediaUrls(dsl) : dsl
 
             // Build augmented manifest that includes registered user effects

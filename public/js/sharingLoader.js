@@ -16,6 +16,14 @@ import {
 } from './noisemaker/bundle.js'
 
 const SHARING_API_BASE = 'https://sharing.noisedeck.app'
+// The sharing image helpers. The file is cached as immutable for each `v`, so
+// a change to the helpers needs a new `v` here.
+export const PORTABLE_IMAGES_URL = 'https://sharing.noisedeck.app/js/portableImages.js?v=images-20261006'
+
+/** The sharing image helpers module. */
+export function loadImageTools() {
+    return import(PORTABLE_IMAGES_URL)
+}
 
 /**
  * Fetch composition data from the sharing API
@@ -193,22 +201,29 @@ export function getCodeFromUrl() {
 
 /**
  * Shared compositions list their images as { id, url } files. Load each file
- * into the { id, dataUrl, ... } images the renderer binds, checked against its
- * id. A file that cannot be loaded is left out and logged.
+ * into the { id, blob, ... } images the renderer binds, checked against its
+ * id. An image that an older response carried as a base64 { id, dataUrl } is
+ * read into the same Blob record. An image that cannot be loaded is left out
+ * and logged.
  */
 export async function loadSharedImageFiles(images = []) {
-    if (!images.some(image => image?.url && image.dataUrl === undefined)) return images
-    const { prepareImage } = await import('https://sharing.noisedeck.app/js/portableImages.js?v=images-20260929')
+    if (!images.some(image => image?.url || image?.dataUrl !== undefined)) return images
+    const { prepareImageFile, imageToBlob } = await loadImageTools()
     const loaded = await Promise.all(images.map(async image => {
-        if (!image?.url || image.dataUrl !== undefined) return image
+        if (image?.blob instanceof Blob) return image
         try {
-            const response = await fetch(image.url)
-            if (!response.ok) throw new Error(`HTTP ${response.status}`)
-            const prepared = await prepareImage(await response.blob())
+            let blob
+            if (image?.dataUrl !== undefined) blob = imageToBlob(image)
+            else if (image?.url) {
+                const response = await fetch(image.url)
+                if (!response.ok) throw new Error(`HTTP ${response.status}`)
+                blob = await response.blob()
+            } else return image
+            const prepared = await prepareImageFile(blob)
             if (prepared.id !== image.id) throw new Error('the image bytes do not match their id')
             return prepared
         } catch (error) {
-            console.warn(`Shared image ${image.id} was not loaded:`, error)
+            console.warn(`Shared image ${image?.id} was not loaded:`, error)
             return null
         }
     }))
@@ -258,16 +273,18 @@ export async function uploadScreenshot(canvas) {
  * sent as base64.
  * @param {object} payload - The share request body; `dsl` and `screenshot` are set
  * @param {object} options
- * @param {Array<{id: string, dataUrl: string}>} [options.images] - The renderer's images
+ * @param {Array<{id: string, blob: Blob}>} [options.images] - The renderer's images
  * @param {HTMLCanvasElement|null} [options.screenshot] - The screenshot canvas
  * @returns {Promise<object>} The payload
  */
 export async function attachShareFiles(payload, { images = [], screenshot = null } = {}) {
     if (/\burl\b/.test(payload.dsl)) {
-        const tools = await import('https://sharing.noisedeck.app/js/portableImages.js?v=images-20260929')
-        const prepared = await tools.prepareImagesForShare(payload.dsl, images)
+        const tools = await loadImageTools()
+        // Every prepared image holds its bytes as a Blob, including one the
+        // program carries inline.
+        const prepared = await tools.prepareImagesForShare(payload.dsl, images, { files: true })
         const ids = new Map()
-        for (const image of prepared.images) ids.set(image.id, await uploadImage(tools.imageToBlob(image)))
+        for (const image of prepared.images) ids.set(image.id, await uploadImage(image.blob))
         payload.dsl = [...ids].every(([from, to]) => from === to)
             ? prepared.dsl
             : tools.replaceMediaUrls(prepared.dsl, url => url?.startsWith('image:') && ids.has(url.slice(6)) ? `image:${ids.get(url.slice(6))}` : url)

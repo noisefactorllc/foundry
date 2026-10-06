@@ -2,7 +2,8 @@
  * Tests for WorkspaceStore (public/js/workspace/workspace-store.js).
  *
  * WorkspaceStore is the in-memory effect file store with undo/redo history.
- * It has no imports (no CDN bundle dependency), so it runs directly in Node.
+ * Its only import (imageRecords.js) has no CDN bundle dependency, so it runs
+ * directly in Node.
  *
  * Focus: the data-integrity invariant that loading a different effect
  * (fromObject) must NOT leave the previous effect's history in place — else
