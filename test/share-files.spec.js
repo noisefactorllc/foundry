@@ -149,7 +149,7 @@ test('Foundry shares images as files and reopens them from the sharing service',
                 for (const image of held) assert.deepEqual([image.blob, image.type, image.text], [true, 'image/png', false], `${label}: ${holder} holds ${image.id} as a Blob`)
             }
         }
-        // The workspace saved in IndexedDB: its files, and its images as stored.
+        // The workspace saved in IndexedDB: its files, and its images as stored, as bytes.
         const savedWorkspace = page => page.evaluate(() => new Promise((resolve, reject) => {
             const request = indexedDB.open('shade-workspace')
             request.onerror = () => reject(request.error)
@@ -163,12 +163,12 @@ test('Foundry shares images as files and reopens them from the sharing service',
                     resolve({
                         files: Object.keys(data.files || {}).sort(),
                         filesText: JSON.stringify(data.files || {}),
-                        images: (data.images || []).map(image => ({ id: image.id, blob: image.blob instanceof Blob, type: image.blob?.type, size: image.blob?.size, keys: Object.keys(image).sort() }))
+                        images: (data.images || []).map(image => ({ id: image.id, bytes: image.bytes instanceof ArrayBuffer, type: image.type, size: image.bytes?.byteLength, keys: Object.keys(image).sort() }))
                     })
                 }
             }
         }))
-        async function expectSavedBlobImages(page, ids, label) {
+        async function expectSavedImages(page, ids, label) {
             // Autosave is debounced; poll the store until the images are written.
             let saved
             for (let i = 0; i < 100; i++) {
@@ -181,7 +181,7 @@ test('Foundry shares images as files and reopens them from the sharing service',
             assert.doesNotMatch(saved.filesText, TEXT_IMAGE, `${label}: saved files hold no image text`)
             assert.deepEqual(saved.images.map(image => image.id).sort(), [...ids].sort(), `${label}: saved image ids`)
             for (const image of saved.images) {
-                assert.deepEqual([image.blob, image.type, image.keys], [true, 'image/png', ['blob', 'height', 'id', 'mimeType', 'width']], `${label}: ${image.id} is saved as a Blob`)
+                assert.deepEqual([image.bytes, image.type, image.keys], [true, 'image/png', ['bytes', 'height', 'id', 'mimeType', 'type', 'width']], `${label}: ${image.id} is saved as its bytes`)
             }
             return saved
         }
@@ -359,7 +359,7 @@ test('Foundry shares images as files and reopens them from the sharing service',
             assert.deepEqual(pixel, RED_PIXEL)
             assert.ok(sent.some(request => request.path === `/api/composition/${sharedCode}?images=files`))
             await expectBlobImages(page, [RED_ID], 'import from url')
-            const saved = await expectSavedBlobImages(page, [RED_ID], 'import from url')
+            const saved = await expectSavedImages(page, [RED_ID], 'import from url')
             assert.equal(saved.images[0].size, RED.length)
             assert.deepEqual(errors, [])
         } finally { await importer.close() }
@@ -405,7 +405,7 @@ test('Foundry shares images as files and reopens them from the sharing service',
             assert.deepEqual(pixel, RED_PIXEL)
             await expectBlobImages(page, [RED_ID], 'earlier workspace')
             assert.equal(await page.evaluate(() => window.effectWorkspace.workspaceStore.hasFile('images.json')), false)
-            const saved = await expectSavedBlobImages(page, [RED_ID], 'earlier workspace')
+            const saved = await expectSavedImages(page, [RED_ID], 'earlier workspace')
             assert.deepEqual(saved.files, ['dsl.txt'])
 
             sent.length = 0
@@ -470,7 +470,7 @@ test('Foundry shares images as files and reopens them from the sharing service',
                 for (const image of await heldImages(page, 'workspace')) assert.deepEqual([image.id, image.blob, image.text], [RED_ID, true, false], label)
                 assert.equal((await heldImages(page, 'workspace')).length, 1, label)
                 assert.equal(await page.evaluate(() => window.effectWorkspace.workspaceStore.hasFile('images.json')), false, label)
-                const saved = await expectSavedBlobImages(page, [RED_ID], label)
+                const saved = await expectSavedImages(page, [RED_ID], label)
                 assert.equal(saved.images[0].size, RED.length)
                 assert.deepEqual(errors, [], label)
             } finally { await context.close() }

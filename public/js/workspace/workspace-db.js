@@ -97,16 +97,51 @@ function withStore(mode, run) {
     })
 }
 
+// The bytes of each image Blob this page has saved or loaded. The app saves
+// once more as the page unloads, and WebKit refuses to read a Blob then.
+const imageBytes = new WeakMap()
+
+/** @param {Blob} blob @returns {Promise<ArrayBuffer>} */
+async function bytesOf(blob) {
+    let bytes = imageBytes.get(blob)
+    if (!bytes) {
+        bytes = await blob.arrayBuffer()
+        imageBytes.set(blob, bytes)
+    }
+    return bytes
+}
+
 /**
- * The image records to store with a workspace: each holds its bytes as a
- * Blob, which IndexedDB stores as a file. No image is stored as text.
+ * The image records to store with a workspace: each holds its file's bytes in
+ * an ArrayBuffer with its media type. WebKit's private browsing refuses a Blob
+ * or File in IndexedDB but takes an ArrayBuffer. No image is stored as text.
+ *
+ * Every file is read here, before a transaction opens: awaiting inside one
+ * would let it commit early.
  * @param {Array<object>} [images]
- * @returns {Array<{id: string, blob: Blob, mimeType?: string, width?: number, height?: number}>}
+ * @returns {Promise<Array<{id: string, type: string, bytes: ArrayBuffer, mimeType?: string, width?: number, height?: number}>>}
  */
 function storedImages(images) {
-    return (images || [])
+    return Promise.all((images || [])
         .filter(image => image?.blob instanceof Blob)
-        .map(({ id, blob, mimeType, width, height }) => ({ id, blob, mimeType, width, height }))
+        .map(async ({ id, blob, mimeType, width, height }) => ({ id, type: blob.type, bytes: await bytesOf(blob), mimeType, width, height })))
+}
+
+/**
+ * Stored image records as the Blob records a workspace holds. Records saved
+ * earlier with a Blob are returned as they are.
+ * @param {Array<object>} [images]
+ * @returns {Array<object>|undefined}
+ */
+function loadedImages(images) {
+    if (!Array.isArray(images)) return images
+    return images.map(image => {
+        if (!(image?.bytes instanceof ArrayBuffer)) return image
+        const { bytes, type, ...record } = image
+        const blob = new Blob([bytes], { type: type || record.mimeType || '' })
+        imageBytes.set(blob, bytes)
+        return { ...record, blob }
+    })
 }
 
 /**
@@ -126,7 +161,7 @@ export async function saveWorkspace(store, id = CURRENT_KEY) {
         id,
         name: store.name,
         files: filesObj,
-        images: storedImages(store.images),
+        images: await storedImages(store.images),
         savedAt: Date.now()
     }
 
@@ -138,9 +173,10 @@ export async function saveWorkspace(store, id = CURRENT_KEY) {
 /**
  * Load workspace from IndexedDB
  *
- * A workspace saved before images were files lists its images as base64 text
- * in an `images.json` file. Its images are read into Blob records, and the
- * saved workspace is rewritten with them as Blobs.
+ * Images are stored as their bytes and loaded as Blob records. A workspace
+ * saved before images were files lists its images as base64 text in an
+ * `images.json` file. Its images are read into Blob records, and the saved
+ * workspace is rewritten with them as bytes.
  *
  * @param {import('./workspace-store.js').WorkspaceStore} store - Workspace store
  * @param {string} [id='current'] - Workspace ID
@@ -156,12 +192,13 @@ export async function loadWorkspace(store, id = CURRENT_KEY) {
         return false
     }
 
-    store.fromObject(data.files, data.name, data.images)
+    store.fromObject(data.files, data.name, loadedImages(data.images))
     if (data.files && Object.hasOwn(data.files, 'images.json')) {
         const { 'images.json': _imagesFile, ...files } = data.files
         try {
+            const images = await storedImages(store.images)
             await withStore('readwrite', (objectStore) => {
-                objectStore.put({ ...data, files, images: storedImages(store.images) })
+                objectStore.put({ ...data, files, images })
             })
         } catch (err) {
             console.warn('[WorkspaceDB] Could not rewrite the workspace images as files:', err)

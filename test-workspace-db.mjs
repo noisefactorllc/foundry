@@ -91,7 +91,7 @@ if (rt.foundAfterDelete === false) ok('deleteWorkspace removes the workspace')
 else fail('workspace still present after delete')
 
 // =============================================================================
-console.log('Images are saved as Blobs; an earlier base64 images.json is rewritten as Blobs')
+console.log('Images are saved as bytes; earlier Blob records still load; an earlier base64 images.json is rewritten as bytes')
 // =============================================================================
 const img = await page.evaluate(async () => {
     const db = await import('/js/workspace/workspace-db.js')
@@ -129,6 +129,12 @@ const img = await page.evaluate(async () => {
     await db.loadWorkspace(loaded, 'test-images')
     const loadedBytes = [...new Uint8Array(await loaded.images[0].blob.arrayBuffer())]
 
+    // A record saved before images were stored as bytes holds a Blob.
+    await raw({ id: 'test-blob', name: 'Blob', files: { 'dsl.txt': 'x' }, images: [{ id, blob, mimeType: 'image/png', width: 1, height: 1 }], savedAt: 1 })
+    const blobLoaded = new WorkspaceStore()
+    await db.loadWorkspace(blobLoaded, 'test-blob')
+    const blobBytes = [...new Uint8Array(await blobLoaded.images[0].blob.arrayBuffer())]
+
     // An earlier record: the image listed as base64 text in images.json.
     const dataUrl = `data:image/png;base64,${btoa(String.fromCharCode(...bytes))}`
     await raw({ id: 'test-earlier', name: 'Earlier', files: { 'dsl.txt': 'x', 'images.json': JSON.stringify([{ id, dataUrl, mimeType: 'image/png', width: 1, height: 1 }]) }, savedAt: 1 })
@@ -138,31 +144,39 @@ const img = await page.evaluate(async () => {
     const earlierBytes = [...new Uint8Array(await earlier.images[0].blob.arrayBuffer())]
     await db.deleteWorkspace('test-images')
     await db.deleteWorkspace('test-earlier')
+    await db.deleteWorkspace('test-blob')
+    const saved = record.images[0]
     return {
-        savedBlob: record.images.length === 1 && record.images[0].blob instanceof Blob,
+        savedBytes: record.images.length === 1 && saved.bytes instanceof ArrayBuffer && !('blob' in saved) && saved.type === 'image/png' &&
+            [...new Uint8Array(saved.bytes)].join() === [...bytes].join() && saved.mimeType === 'image/png' && saved.width === 1 && saved.height === 1,
         savedText: TEXT.test(JSON.stringify(record)) || 'images.json' in record.files,
-        loadedBlob: loaded.images.length === 1 && loaded.images[0].blob instanceof Blob && !('dataUrl' in loaded.images[0]),
+        loadedBlob: loaded.images.length === 1 && loaded.images[0].blob instanceof Blob && loaded.images[0].blob.type === 'image/png' &&
+            !('dataUrl' in loaded.images[0]) && !('bytes' in loaded.images[0]) && loaded.images[0].width === 1,
         loadedBytesMatch: loadedBytes.join() === [...bytes].join(),
+        blobRecordLoads: blobLoaded.images.length === 1 && blobLoaded.images[0].blob instanceof Blob && blobBytes.join() === [...bytes].join(),
         earlierBlob: earlier.images.length === 1 && earlier.images[0].blob instanceof Blob && !('dataUrl' in earlier.images[0]),
         earlierBytesMatch: earlierBytes.join() === [...bytes].join(),
         earlierFiles: earlier.listFiles(),
-        rewrittenBlob: rewritten.images?.length === 1 && rewritten.images[0].blob instanceof Blob,
+        rewrittenBytes: rewritten.images?.length === 1 && rewritten.images[0].bytes instanceof ArrayBuffer && !('blob' in rewritten.images[0]),
         rewrittenText: TEXT.test(JSON.stringify(rewritten)) || 'images.json' in rewritten.files,
         rewrittenKept: rewritten.name === 'Earlier' && rewritten.savedAt === 1 && rewritten.files['dsl.txt'] === 'x'
     }
 })
 
-if (img.savedBlob && !img.savedText) ok('images are saved as Blobs, with no image text')
-else fail(`saved images not Blobs (blob=${img.savedBlob}, text=${img.savedText})`)
+if (img.savedBytes && !img.savedText) ok('images are saved as their bytes in an ArrayBuffer with their type, with no Blob and no image text')
+else fail(`saved images not bytes (bytes=${img.savedBytes}, text=${img.savedText})`)
 
 if (img.loadedBlob && img.loadedBytesMatch) ok('saved images load back as Blob records with the same bytes')
 else fail(`loaded images wrong (blob=${img.loadedBlob}, bytes=${img.loadedBytesMatch})`)
 
+if (img.blobRecordLoads) ok('an image saved earlier as a Blob still loads with the same bytes')
+else fail('an image saved earlier as a Blob did not load')
+
 if (img.earlierBlob && img.earlierBytesMatch && img.earlierFiles.join() === 'dsl.txt') ok('an earlier base64 images.json loads as Blob records')
 else fail(`earlier images wrong (blob=${img.earlierBlob}, bytes=${img.earlierBytesMatch}, files=${img.earlierFiles})`)
 
-if (img.rewrittenBlob && !img.rewrittenText && img.rewrittenKept) ok('the earlier saved workspace is rewritten with Blobs and no image text')
-else fail(`earlier workspace not rewritten (blob=${img.rewrittenBlob}, text=${img.rewrittenText}, kept=${img.rewrittenKept})`)
+if (img.rewrittenBytes && !img.rewrittenText && img.rewrittenKept) ok('the earlier saved workspace is rewritten with image bytes and no image text')
+else fail(`earlier workspace not rewritten (bytes=${img.rewrittenBytes}, text=${img.rewrittenText}, kept=${img.rewrittenKept})`)
 
 // =============================================================================
 console.log('Migration safety (no connection leak / no upgrade hang)')
