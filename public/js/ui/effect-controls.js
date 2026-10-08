@@ -371,16 +371,38 @@ function conditionValueIsTruthy(value) {
     return true
 }
 
+// A parameter driven by an oscillator, MIDI, audio or a variable has no single
+// value to test, so a condition on it is unknown (null), and only a condition
+// that is false whatever the source does disables the control.
 function evaluateEnableCondition(condition, params) {
-    if (typeof condition === 'string') return conditionValueIsTruthy(params[condition])
+    return evaluateCondition(condition, params) !== false
+}
+
+function evaluateCondition(condition, params) {
+    if (typeof condition === 'string') {
+        if (isAutomationValue(params[condition])) return null
+        return conditionValueIsTruthy(params[condition])
+    }
     if (typeof condition !== 'object' || condition === null) return true
-    if (Array.isArray(condition.or)) return condition.or.some(c => evaluateEnableCondition(c, params))
-    if (Array.isArray(condition.and)) return condition.and.every(c => evaluateEnableCondition(c, params))
-    if (condition.not !== undefined) return !evaluateEnableCondition(condition.not, params)
+    if (Array.isArray(condition.or)) {
+        const results = condition.or.map(c => evaluateCondition(c, params))
+        if (results.includes(true)) return true
+        return results.includes(null) ? null : false
+    }
+    if (Array.isArray(condition.and)) {
+        const results = condition.and.map(c => evaluateCondition(c, params))
+        if (results.includes(false)) return false
+        return results.includes(null) ? null : true
+    }
+    if (condition.not !== undefined) {
+        const result = evaluateCondition(condition.not, params)
+        return result === null ? null : !result
+    }
 
     const paramName = condition.param
     if (!paramName) return true
     const value = params[paramName]
+    if (isAutomationValue(value)) return null
 
     const operators = ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'in', 'notIn']
     if (!operators.some(op => condition[op] !== undefined)) return conditionValueIsTruthy(value)
@@ -1077,4 +1099,4 @@ if (!customElements.get('effect-controls')) {
     customElements.define('effect-controls', EffectControls)
 }
 
-export { EffectControls }
+export { EffectControls, evaluateEnableCondition }
