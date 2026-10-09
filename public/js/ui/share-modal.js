@@ -108,8 +108,12 @@ export class ShareModal {
         // Check if we have the minimum required files
         const defJson = files['definition.json']
         const glslFiles = Object.keys(files).filter(p => p.startsWith('glsl/') && p.endsWith('.glsl'))
+        const wgslFiles = Object.keys(files).filter(p => p.startsWith('wgsl/') && p.endsWith('.wgsl'))
         
-        if (!defJson || glslFiles.length === 0) {
+        // Same contents the "edit in ..." handlers package: an effect that
+        // carries only WGSL shaders, or carries help.md, must still travel in
+        // the share.
+        if (!defJson || (glslFiles.length === 0 && wgslFiles.length === 0)) {
             console.log('[ShareModal] No complete effect to package')
             return null
         }
@@ -128,6 +132,16 @@ export class ShareModal {
             // Add GLSL files
             for (const path of glslFiles) {
                 zip.file(path, files[path])
+            }
+
+            // Add WGSL files
+            for (const path of wgslFiles) {
+                zip.file(path, files[path])
+            }
+
+            // Add help.md if present
+            if (files['help.md']) {
+                zip.file('help.md', files['help.md'])
             }
 
             // Generate base64-encoded ZIP
