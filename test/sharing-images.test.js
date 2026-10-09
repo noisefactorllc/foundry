@@ -18,13 +18,20 @@ const source = sharingLoaderSource
 const loader = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'))
 
 // The real sharing image helpers (SHARING_REPO, default ../../sharing). The
-// sibling checkout is private, so where it is not checked out (CI, a fresh
-// clone) the two tests below that exercise the real helpers are skipped with
-// a reason instead of crashing the whole file at module load. Set SHARING_REPO
-// to any checkout of noisefactorllc/sharing to run them.
+// sibling checkout is private, so where it is not checked out the helpers are
+// fetched from the same URL sharingLoader.js loads in the browser — the exact
+// module, pinned at the same `v` (read out of sharingLoader.js's source). No
+// test is skipped.
 const SHARING = process.env.SHARING_REPO || fileURLToPath(new URL('../../sharing', import.meta.url))
-const helper = await import(pathToFileURL(`${SHARING}/public/js/portableImages.js`).href).catch(() => null)
-const helperSkip = helper ? false : 'the real sharing helpers are unavailable (no ../../sharing checkout; set SHARING_REPO)'
+const sharingLoaderText = await readFile(new URL('../public/js/sharingLoader.js', import.meta.url), 'utf8')
+const helperPin = sharingLoaderText.match(/^export const PORTABLE_IMAGES_URL = '(.+)'$/m)?.[1]
+const helper = await import(pathToFileURL(`${SHARING}/public/js/portableImages.js`).href).catch(async () => {
+    const response = await fetch(helperPin || 'https://sharing.noisedeck.app/js/portableImages.js')
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    const text = await response.text()
+    if (!/\bexport\b/.test(text)) throw new Error('served helper is not a module')
+    return import(`data:text/javascript;base64,${Buffer.from(text).toString('base64')}`)
+})
 const { imageFileRecords } = await import('../public/js/imageRecords.js')
 
 /** A 2x2 PNG of one color, its SHA-256 id, and the base64 data URL earlier records carried. */
@@ -58,7 +65,7 @@ async function assertBlobRecords(images, expected) {
     assert.doesNotMatch(JSON.stringify(images), /base64|data:image|dataUrl/)
 }
 
-test('composition imports hold image bytes as Blobs, reading older base64 records into Blobs', { skip: helperSkip }, async t => {
+test('composition imports hold image bytes as Blobs, reading older base64 records into Blobs', async t => {
     const previous = globalThis.fetch
     const listed = [
         { id: RED_PNG.id, dataUrl: RED_PNG.dataUrl, mimeType: 'image/png', width: 2, height: 2 },
@@ -389,7 +396,7 @@ test('opening a share asks for image files and loads each one checked against it
     assert.equal(warnings.length, 2)
 })
 
-test('a share sends inline and earlier base64 images as files, with the real sharing helpers', { skip: helperSkip }, async t => {
+test('a share sends inline and earlier base64 images as files, with the real sharing helpers', async t => {
     const requests = sharingService(t, { ids: { 'image/png': undefined, 'image/jpeg': SHOT_ID } })
     // The fake service answers each upload with the SHA-256 of its bytes, as the service does.
     const service = globalThis.fetch
