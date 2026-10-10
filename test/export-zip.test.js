@@ -45,6 +45,7 @@ function runExport({ files, dsl, name = 'workspace', images = [] }) {
             body: { appendChild: () => {}, removeChild: () => {} }
         },
         window: { JSZip: FakeZip },
+        loadJSZip: async () => {},
         workspaceStore,
         dslEditor: { value: dsl },
         toast: { success: () => {}, error: (message) => { throw new Error(message) } }

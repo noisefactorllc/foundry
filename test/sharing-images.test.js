@@ -420,7 +420,7 @@ test('a share sends inline and earlier base64 images as files, with the real sha
 test('every share request goes through the file upload helper', async () => {
     const app = await readFile(new URL('../public/js/app.js', import.meta.url), 'utf8')
     const modal = await readFile(new URL('../public/js/ui/share-modal.js', import.meta.url), 'utf8')
-    for (const [name, text, posts] of [['app.js', app, 4], ['share-modal.js', modal, 1]]) {
+    for (const [name, text, posts] of [['app.js', app, 1], ['share-modal.js', modal, 1]]) {
         assert.equal(text.match(/fetch\(SHARE_API_URL/g).length, posts, `${name} share requests`)
         assert.equal(text.match(/await attachShareFiles\(payload, \{ images: renderer\??\.images \|\| \[\], screenshot \}\)/g).length, posts, `${name} uploads files`)
         assert.doesNotMatch(text, /prepareImagesForShare|payload\.screenshot = screenshot/, name)
@@ -428,8 +428,18 @@ test('every share request goes through the file upload helper', async () => {
     // Only the share dialog's preview image still reads the screenshot as a data URL.
     assert.doesNotMatch(app, /toDataURL/)
     assert.deepEqual(modal.match(/.*toDataURL.*/g).map(line => line.trim()), ["previewImg.src = this.screenshot.toDataURL('image/jpeg', 0.85)"])
-    for (const handler of ['handleEditInShade', 'handleEditInNoisedeck', 'handleEditInNoodles', 'handleEditInPolymorphic']) {
-        const body = app.match(new RegExp(`async function ${handler}\\(\\) \\{[\\s\\S]*?\\n\\}`))[0]
-        assert.ok(body.indexOf('attachShareFiles(') < body.indexOf('fetch(SHARE_API_URL'), `${handler} uploads before it shares`)
+    // Every "edit in ..." menu item shares through the one shared upload path.
+    const share = app.match(/async function shareAndOpen\(\{ label, url, defaultTitle \}\) \{[\s\S]*?\n\}/)[0]
+    assert.ok(share.indexOf('attachShareFiles(') < share.indexOf('fetch(SHARE_API_URL'), 'uploads before it shares')
+    const targets = app.match(/const SHARE_TARGETS = \{[\s\S]*?\n\}/)[0]
+    for (const [target, url] of [
+        ['noisedeck', 'https://noisedeck.app'],
+        ['noodles', 'https://noodles.noisedeck.app'],
+        ['polymorphic', 'https://polymorphic.noisedeck.app'],
+        ['shade', 'https://shade.noisedeck.app']
+    ]) {
+        assert.match(targets, new RegExp(`${target}: \\{ label: '[A-Za-z]+', url: '${url}'`), `${target} target`)
+        assert.equal(app.match(new RegExp(`SHARE_TARGETS\\.${target}`, 'g')).length, 1, `${target} is wired to its menu item once`)
+        assert.match(app, new RegExp(`editIn${target[0].toUpperCase() + target.slice(1)}MenuItem[\\s\\S]{0,120}shareAndOpen\\(SHARE_TARGETS\\.${target}\\)`), `${target} menu item`)
     }
 })

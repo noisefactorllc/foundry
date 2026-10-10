@@ -1612,10 +1612,10 @@ if (menuBarEl) {
                         { id: 'showParametersMenuItem', label: 'show parameters', onSelect: () => showBottomLeftOverlay('params') },
                         { id: 'showDslMenuItem', label: 'show dsl code', onSelect: () => toggleCanvasEditor() },
                         { type: 'separator' },
-                        { id: 'editInNoisedeckMenuItem', label: 'edit in Noisedeck...', onSelect: () => handleEditInNoisedeck() },
-                        { id: 'editInNoodlesMenuItem', label: 'edit in Noodles...', onSelect: () => handleEditInNoodles() },
-                        { id: 'editInPolymorphicMenuItem', label: 'edit in Polymorphic...', onSelect: () => handleEditInPolymorphic() },
-                        { id: 'editInShadeMenuItem', label: 'edit in Shade...', onSelect: () => handleEditInShade() },
+                        { id: 'editInNoisedeckMenuItem', label: 'edit in Noisedeck...', onSelect: () => shareAndOpen(SHARE_TARGETS.noisedeck) },
+                        { id: 'editInNoodlesMenuItem', label: 'edit in Noodles...', onSelect: () => shareAndOpen(SHARE_TARGETS.noodles) },
+                        { id: 'editInPolymorphicMenuItem', label: 'edit in Polymorphic...', onSelect: () => shareAndOpen(SHARE_TARGETS.polymorphic) },
+                        { id: 'editInShadeMenuItem', label: 'edit in Shade...', onSelect: () => shareAndOpen(SHARE_TARGETS.shade) },
                         { type: 'separator' },
                         {
                             id: 'importFromUrlMenuItem',
@@ -1857,15 +1857,7 @@ function handleRedo() {
 async function handleExport() {
     try {
         // Load JSZip dynamically if needed
-        if (!window.JSZip) {
-            await new Promise((resolve, reject) => {
-                const script = document.createElement('script')
-                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'
-                script.onload = resolve
-                script.onerror = () => reject(new Error('Failed to load JSZip'))
-                document.head.appendChild(script)
-            })
-        }
+        await loadJSZip()
         
         const files = workspaceStore.toObject()
         const dsl = dslEditor.value
@@ -1914,304 +1906,127 @@ async function handleExport() {
 
 // Edit in other apps
 const SHARE_API_URL = 'https://sharing.noisedeck.app/api/embed/shorten'
-const NOISEDECK_URL = 'https://noisedeck.app'
-const SHADE_URL = 'https://shade.noisedeck.app'
-const POLYMORPHIC_URL = 'https://polymorphic.noisedeck.app'
-const NOODLES_URL = 'https://noodles.noisedeck.app'
+
+/** The editor apps a composition can be opened in, one entry per "edit in ..." menu item. */
+const SHARE_TARGETS = {
+    noisedeck: { label: 'Noisedeck', url: 'https://noisedeck.app', defaultTitle: 'Foundry' },
+    noodles: { label: 'Noodles', url: 'https://noodles.noisedeck.app', defaultTitle: 'Foundry' },
+    polymorphic: { label: 'Polymorphic', url: 'https://polymorphic.noisedeck.app', defaultTitle: 'Foundry Effect' },
+    shade: { label: 'Shade', url: 'https://shade.noisedeck.app', defaultTitle: 'Foundry' },
+}
 
 /**
- * Share the effect and open Shade in a new window
+ * Load JSZip from its CDN if the page hasn't already.
+ * @returns {Promise<void>}
  */
-async function handleEditInShade() {
-    // Get DSL with current parameter values
-    let dsl = dslEditor.value
-    if (!dsl) {
-        toast.warning('Nothing to edit. Create an effect first!')
-        return
-    }
-    
-    // Try to get DSL with current param values from programState
-    if (renderer?.programState?.toDsl) {
-        try {
-            const dslWithParams = renderer.programState.toDsl()
-            if (dslWithParams && dslWithParams.trim()) {
-                dsl = dslWithParams
-            }
-        } catch (err) {
-            console.warn('[Shade] Failed to get DSL from programState:', err)
-        }
-    }
-    
-    toast.info('Opening in Shade...')
-    
-    try {
-        // Capture screenshot
-        let screenshot = null
-        try {
-            const targetWidth = 1200
-            const targetHeight = 630
-            const tempCanvas = document.createElement('canvas')
-            tempCanvas.width = targetWidth
-            tempCanvas.height = targetHeight
-            const ctx = tempCanvas.getContext('2d')
-            const sourceAspect = canvas.width / canvas.height
-            const targetAspect = targetWidth / targetHeight
-            let sx, sy, sw, sh
-            if (sourceAspect > targetAspect) {
-                sh = canvas.height
-                sw = canvas.height * targetAspect
-                sx = (canvas.width - sw) / 2
-                sy = 0
-            } else {
-                sw = canvas.width
-                sh = canvas.width / targetAspect
-                sx = 0
-                sy = (canvas.height - sh) / 2
-            }
-            ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, targetWidth, targetHeight)
-            screenshot = tempCanvas
-        } catch (err) {
-            console.warn('[Shade] Screenshot capture failed:', err)
-        }
-        
-        // Create effect ZIP if we have workspace files
-        let effectZip = null
-        const files = workspaceStore.toObject()
-        const defJson = files['definition.json']
-        const glslFiles = Object.keys(files).filter(p => p.startsWith('glsl/') && p.endsWith('.glsl'))
-        const wgslFiles = Object.keys(files).filter(p => p.startsWith('wgsl/') && p.endsWith('.wgsl'))
-        
-        if (defJson && (glslFiles.length > 0 || wgslFiles.length > 0)) {
-            try {
-                // Load JSZip if needed
-                if (!window.JSZip) {
-                    await new Promise((resolve, reject) => {
-                        const script = document.createElement('script')
-                        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'
-                        script.onload = resolve
-                        script.onerror = () => reject(new Error('Failed to load JSZip'))
-                        document.head.appendChild(script)
-                    })
-                }
-                
-                const zip = new window.JSZip()
-                zip.file('definition.json', defJson)
-                
-                // Add all GLSL shaders
-                for (const path of glslFiles) {
-                    zip.file(path, files[path])
-                }
-                
-                // Add all WGSL shaders
-                for (const path of wgslFiles) {
-                    zip.file(path, files[path])
-                }
-                
-                // Add help.md if present
-                if (files['help.md']) {
-                    zip.file('help.md', files['help.md'])
-                }
-                
-                const zipBlob = await zip.generateAsync({ type: 'blob' })
-                const reader = new FileReader()
-                effectZip = await new Promise((resolve, reject) => {
-                    reader.onload = () => resolve(reader.result.split(',')[1])
-                    reader.onerror = reject
-                    reader.readAsDataURL(zipBlob)
-                })
-                
-                console.log('[Shade] Created effect ZIP with files:', 
-                    ['definition.json', ...glslFiles, ...wgslFiles, files['help.md'] ? 'help.md' : null].filter(Boolean))
-            } catch (err) {
-                console.warn('[Shade] Effect ZIP creation failed:', err)
-            }
-        }
-        
-        // Build payload
-        const payload = {
-            dsl,
-            title: workspaceStore.name || 'Foundry',
-            description: 'Created with Foundry',
-            ttlMinutes: 60
-        }
-        if (effectZip) payload.effects = [effectZip]
-        
-        // Images and the screenshot go to the sharing service as files.
-        await attachShareFiles(payload, { images: renderer.images || [], screenshot })
+async function loadJSZip() {
+    if (window.JSZip) return
+    await new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'
+        script.onload = resolve
+        script.onerror = () => reject(new Error('Failed to load JSZip'))
+        document.head.appendChild(script)
+    })
+}
 
-        // Upload to sharing service
-        const response = await fetch(SHARE_API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        })
-        
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}))
-            throw new Error(errorData.details || errorData.error || `HTTP ${response.status}`)
+/**
+ * Capture the canvas as a 1200x630 share screenshot, center-cropped to the
+ * target aspect.
+ * @returns {HTMLCanvasElement|null} The screenshot canvas, or null on failure
+ */
+function captureShareScreenshot() {
+    try {
+        const targetWidth = 1200
+        const targetHeight = 630
+        const tempCanvas = document.createElement('canvas')
+        tempCanvas.width = targetWidth
+        tempCanvas.height = targetHeight
+        const ctx = tempCanvas.getContext('2d')
+        const sourceAspect = canvas.width / canvas.height
+        const targetAspect = targetWidth / targetHeight
+        let sx, sy, sw, sh
+        if (sourceAspect > targetAspect) {
+            sh = canvas.height
+            sw = canvas.height * targetAspect
+            sx = (canvas.width - sw) / 2
+            sy = 0
+        } else {
+            sw = canvas.width
+            sh = canvas.width / targetAspect
+            sx = 0
+            sy = (canvas.height - sh) / 2
         }
-        
-        const result = await response.json()
-        console.log('[Shade] Share result:', result)
-        
-        // Open Shade with the short code
-        const shadeUrl = `${SHADE_URL}/?code=${result.code}`
-        window.open(shadeUrl, '_blank')
-        
-        toast.success('Opened in Shade')
-    } catch (error) {
-        console.error('[Shade] Error:', error)
-        toast.error(`Failed to open in Shade: ${error.message}`)
+        ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, targetWidth, targetHeight)
+        return tempCanvas
+    } catch (err) {
+        console.warn('[Share] Screenshot capture failed:', err)
+        return null
     }
 }
 
 /**
- * Share the effect and open Noisedeck in a new window
+ * Bundle the workspace's definition.json, shaders and help.md as the base64
+ * effect ZIP the sharing service accepts, or null when there is nothing to
+ * bundle (no definition or shaders) or bundling fails.
+ * @param {string} label - Target label for console messages
+ * @returns {Promise<string|null>} Base64 ZIP payload
  */
-async function handleEditInNoisedeck() {
-    // Get DSL with current parameter values
-    let dsl = dslEditor.value
-    if (!dsl) {
-        toast.warning('Nothing to edit. Create an effect first!')
-        return
-    }
-    
-    // Try to get DSL with current param values from programState
-    if (renderer?.programState?.toDsl) {
-        try {
-            const dslWithParams = renderer.programState.toDsl()
-            if (dslWithParams && dslWithParams.trim()) {
-                dsl = dslWithParams
-            }
-        } catch (err) {
-            console.warn('[Noisedeck] Failed to get DSL from programState:', err)
-        }
-    }
-    
-    toast.info('Opening in Noisedeck...')
-    
-    try {
-        // Capture screenshot
-        let screenshot = null
-        try {
-            const targetWidth = 1200
-            const targetHeight = 630
-            const tempCanvas = document.createElement('canvas')
-            tempCanvas.width = targetWidth
-            tempCanvas.height = targetHeight
-            const ctx = tempCanvas.getContext('2d')
-            const sourceAspect = canvas.width / canvas.height
-            const targetAspect = targetWidth / targetHeight
-            let sx, sy, sw, sh
-            if (sourceAspect > targetAspect) {
-                sh = canvas.height
-                sw = canvas.height * targetAspect
-                sx = (canvas.width - sw) / 2
-                sy = 0
-            } else {
-                sw = canvas.width
-                sh = canvas.width / targetAspect
-                sx = 0
-                sy = (canvas.height - sh) / 2
-            }
-            ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, targetWidth, targetHeight)
-            screenshot = tempCanvas
-        } catch (err) {
-            console.warn('[Noisedeck] Screenshot capture failed:', err)
-        }
-        
-        // Create effect ZIP if we have workspace files
-        let effectZip = null
-        const files = workspaceStore.toObject()
-        const defJson = files['definition.json']
-        const glslFiles = Object.keys(files).filter(p => p.startsWith('glsl/') && p.endsWith('.glsl'))
-        const wgslFiles = Object.keys(files).filter(p => p.startsWith('wgsl/') && p.endsWith('.wgsl'))
-        
-        if (defJson && (glslFiles.length > 0 || wgslFiles.length > 0)) {
-            try {
-                // Load JSZip if needed
-                if (!window.JSZip) {
-                    await new Promise((resolve, reject) => {
-                        const script = document.createElement('script')
-                        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'
-                        script.onload = resolve
-                        script.onerror = () => reject(new Error('Failed to load JSZip'))
-                        document.head.appendChild(script)
-                    })
-                }
-                
-                const zip = new window.JSZip()
-                zip.file('definition.json', defJson)
-                
-                // Add all GLSL shaders
-                for (const path of glslFiles) {
-                    zip.file(path, files[path])
-                }
-                
-                // Add all WGSL shaders
-                for (const path of wgslFiles) {
-                    zip.file(path, files[path])
-                }
-                
-                // Add help.md if present
-                if (files['help.md']) {
-                    zip.file('help.md', files['help.md'])
-                }
-                
-                const zipBlob = await zip.generateAsync({ type: 'blob' })
-                const reader = new FileReader()
-                effectZip = await new Promise((resolve, reject) => {
-                    reader.onload = () => resolve(reader.result.split(',')[1])
-                    reader.onerror = reject
-                    reader.readAsDataURL(zipBlob)
-                })
-            } catch (err) {
-                console.warn('[Noisedeck] Effect ZIP creation failed:', err)
-            }
-        }
-        
-        // Build payload
-        const payload = {
-            dsl,
-            title: workspaceStore.name || 'Foundry',
-            description: 'Created with Foundry',
-            ttlMinutes: 60
-        }
-        if (effectZip) payload.effects = [effectZip]
-        
-        // Images and the screenshot go to the sharing service as files.
-        await attachShareFiles(payload, { images: renderer.images || [], screenshot })
+async function buildShareEffectZip(label) {
+    const files = workspaceStore.toObject()
+    const defJson = files['definition.json']
+    const glslFiles = Object.keys(files).filter(p => p.startsWith('glsl/') && p.endsWith('.glsl'))
+    const wgslFiles = Object.keys(files).filter(p => p.startsWith('wgsl/') && p.endsWith('.wgsl'))
 
-        // Upload to sharing service
-        const response = await fetch(SHARE_API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        })
-        
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}))
-            throw new Error(errorData.details || errorData.error || `HTTP ${response.status}`)
+    if (!defJson || (glslFiles.length === 0 && wgslFiles.length === 0)) {
+        return null
+    }
+
+    try {
+        await loadJSZip()
+
+        const zip = new window.JSZip()
+        zip.file('definition.json', defJson)
+
+        // Add all GLSL shaders
+        for (const path of glslFiles) {
+            zip.file(path, files[path])
         }
-        
-        const result = await response.json()
-        console.log('[Noisedeck] Share result:', result)
-        
-        // Open Noisedeck with the short code
-        const noisedeckUrl = `${NOISEDECK_URL}/?code=${result.code}`
-        window.open(noisedeckUrl, '_blank')
-        
-        toast.success('Opened in Noisedeck')
-    } catch (error) {
-        console.error('[Noisedeck] Error:', error)
-        toast.error(`Failed to open in Noisedeck: ${error.message}`)
+
+        // Add all WGSL shaders
+        for (const path of wgslFiles) {
+            zip.file(path, files[path])
+        }
+
+        // Add help.md if present
+        if (files['help.md']) {
+            zip.file('help.md', files['help.md'])
+        }
+
+        const zipBlob = await zip.generateAsync({ type: 'blob' })
+        const reader = new FileReader()
+        const effectZip = await new Promise((resolve, reject) => {
+            reader.onload = () => resolve(reader.result.split(',')[1])
+            reader.onerror = reject
+            reader.readAsDataURL(zipBlob)
+        })
+
+        console.log(`[${label}] Created effect ZIP with files:`,
+            ['definition.json', ...glslFiles, ...wgslFiles, files['help.md'] ? 'help.md' : null].filter(Boolean))
+        return effectZip
+    } catch (err) {
+        console.warn(`[${label}] Effect ZIP creation failed:`, err)
+        return null
     }
 }
 
 /**
- * Share the effect and open Noodles in a new window
+ * Share the current effect to the sharing service and open one of the editor
+ * apps with the short code. The single implementation behind every
+ * "edit in ..." menu item; per-app behavior comes from SHARE_TARGETS.
+ * @param {{label: string, url: string, defaultTitle: string}} target - Share target
  */
-async function handleEditInNoodles() {
+async function shareAndOpen({ label, url, defaultTitle }) {
     // Get DSL with current parameter values
     let dsl = dslEditor.value
     if (!dsl) {
@@ -2227,96 +2042,23 @@ async function handleEditInNoodles() {
                 dsl = dslWithParams
             }
         } catch (err) {
-            console.warn('[Noodles] Failed to get DSL from programState:', err)
+            console.warn(`[${label}] Failed to get DSL from programState:`, err)
         }
     }
 
-    toast.info('Opening in Noodles...')
+    toast.info(`Opening in ${label}...`)
 
     try {
         // Capture screenshot
-        let screenshot = null
-        try {
-            const targetWidth = 1200
-            const targetHeight = 630
-            const tempCanvas = document.createElement('canvas')
-            tempCanvas.width = targetWidth
-            tempCanvas.height = targetHeight
-            const ctx = tempCanvas.getContext('2d')
-            const sourceAspect = canvas.width / canvas.height
-            const targetAspect = targetWidth / targetHeight
-            let sx, sy, sw, sh
-            if (sourceAspect > targetAspect) {
-                sh = canvas.height
-                sw = canvas.height * targetAspect
-                sx = (canvas.width - sw) / 2
-                sy = 0
-            } else {
-                sw = canvas.width
-                sh = canvas.width / targetAspect
-                sx = 0
-                sy = (canvas.height - sh) / 2
-            }
-            ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, targetWidth, targetHeight)
-            screenshot = tempCanvas
-        } catch (err) {
-            console.warn('[Noodles] Screenshot capture failed:', err)
-        }
+        const screenshot = captureShareScreenshot()
 
         // Create effect ZIP if we have workspace files
-        let effectZip = null
-        const files = workspaceStore.toObject()
-        const defJson = files['definition.json']
-        const glslFiles = Object.keys(files).filter(p => p.startsWith('glsl/') && p.endsWith('.glsl'))
-        const wgslFiles = Object.keys(files).filter(p => p.startsWith('wgsl/') && p.endsWith('.wgsl'))
-
-        if (defJson && (glslFiles.length > 0 || wgslFiles.length > 0)) {
-            try {
-                // Load JSZip if needed
-                if (!window.JSZip) {
-                    await new Promise((resolve, reject) => {
-                        const script = document.createElement('script')
-                        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'
-                        script.onload = resolve
-                        script.onerror = () => reject(new Error('Failed to load JSZip'))
-                        document.head.appendChild(script)
-                    })
-                }
-
-                const zip = new window.JSZip()
-                zip.file('definition.json', defJson)
-
-                // Add all GLSL shaders
-                for (const path of glslFiles) {
-                    zip.file(path, files[path])
-                }
-
-                // Add all WGSL shaders
-                for (const path of wgslFiles) {
-                    zip.file(path, files[path])
-                }
-
-                // Add help.md if present
-                if (files['help.md']) {
-                    zip.file('help.md', files['help.md'])
-                }
-
-                const zipBlob = await zip.generateAsync({ type: 'blob' })
-                const reader = new FileReader()
-                effectZip = await new Promise((resolve, reject) => {
-                    reader.onload = () => resolve(reader.result.split(',')[1])
-                    reader.onerror = reject
-                    reader.readAsDataURL(zipBlob)
-                })
-            } catch (err) {
-                console.warn('[Noodles] Effect ZIP creation failed:', err)
-            }
-        }
+        const effectZip = await buildShareEffectZip(label)
 
         // Build payload
         const payload = {
             dsl,
-            title: workspaceStore.name || 'Foundry',
+            title: workspaceStore.name || defaultTitle,
             description: 'Created with Foundry',
             ttlMinutes: 60
         }
@@ -2338,154 +2080,15 @@ async function handleEditInNoodles() {
         }
 
         const result = await response.json()
-        console.log('[Noodles] Share result:', result)
+        console.log(`[${label}] Share result:`, result)
 
-        // Open Noodles with the short code
-        const noodlesUrl = `${NOODLES_URL}/?code=${result.code}`
-        window.open(noodlesUrl, '_blank')
+        // Open the app with the short code
+        window.open(`${url}/?code=${result.code}`, '_blank')
 
-        toast.success('Opened in Noodles')
+        toast.success(`Opened in ${label}`)
     } catch (error) {
-        console.error('[Noodles] Error:', error)
-        toast.error(`Failed to open in Noodles: ${error.message}`)
-    }
-}
-
-/**
- * Share the effect and open Polymorphic in a new window
- */
-async function handleEditInPolymorphic() {
-    // Get DSL with current parameter values
-    let dsl = dslEditor.value
-    if (!dsl) {
-        toast.warning('Nothing to edit. Create an effect first!')
-        return
-    }
-    
-    // Try to get DSL with current param values from programState
-    if (renderer?.programState?.toDsl) {
-        try {
-            const dslWithParams = renderer.programState.toDsl()
-            if (dslWithParams && dslWithParams.trim()) {
-                dsl = dslWithParams
-            }
-        } catch (err) {
-            console.warn('[Polymorphic] Failed to get DSL from programState:', err)
-        }
-    }
-    
-    toast.info('Opening in Polymorphic...')
-    
-    try {
-        // Capture screenshot
-        let screenshot = null
-        try {
-            const targetWidth = 1200
-            const targetHeight = 630
-            const tempCanvas = document.createElement('canvas')
-            tempCanvas.width = targetWidth
-            tempCanvas.height = targetHeight
-            const ctx = tempCanvas.getContext('2d')
-            const sourceAspect = canvas.width / canvas.height
-            const targetAspect = targetWidth / targetHeight
-            let sx, sy, sw, sh
-            if (sourceAspect > targetAspect) {
-                sh = canvas.height
-                sw = canvas.height * targetAspect
-                sx = (canvas.width - sw) / 2
-                sy = 0
-            } else {
-                sw = canvas.width
-                sh = canvas.width / targetAspect
-                sx = 0
-                sy = (canvas.height - sh) / 2
-            }
-            ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, targetWidth, targetHeight)
-            screenshot = tempCanvas
-        } catch (err) {
-            console.warn('[Polymorphic] Screenshot capture failed:', err)
-        }
-        
-        // Create effect ZIP if we have workspace files
-        let effectZip = null
-        const files = workspaceStore.toObject()
-        const defJson = files['definition.json']
-        const glslFiles = Object.keys(files).filter(p => p.startsWith('glsl/') && p.endsWith('.glsl'))
-        const wgslFiles = Object.keys(files).filter(p => p.startsWith('wgsl/') && p.endsWith('.wgsl'))
-        
-        if (defJson && (glslFiles.length > 0 || wgslFiles.length > 0)) {
-            try {
-                // Load JSZip if needed
-                if (!window.JSZip) {
-                    await new Promise((resolve, reject) => {
-                        const script = document.createElement('script')
-                        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'
-                        script.onload = resolve
-                        script.onerror = () => reject(new Error('Failed to load JSZip'))
-                        document.head.appendChild(script)
-                    })
-                }
-                
-                const zip = new window.JSZip()
-                zip.file('definition.json', defJson)
-                
-                for (const path of glslFiles) {
-                    zip.file(path, files[path])
-                }
-                for (const path of wgslFiles) {
-                    zip.file(path, files[path])
-                }
-                if (files['help.md']) {
-                    zip.file('help.md', files['help.md'])
-                }
-                
-                const zipBlob = await zip.generateAsync({ type: 'blob' })
-                const reader = new FileReader()
-                effectZip = await new Promise((resolve, reject) => {
-                    reader.onload = () => resolve(reader.result.split(',')[1])
-                    reader.onerror = reject
-                    reader.readAsDataURL(zipBlob)
-                })
-            } catch (err) {
-                console.warn('[Polymorphic] Effect ZIP creation failed:', err)
-            }
-        }
-        
-        // Build payload
-        const payload = {
-            dsl,
-            title: workspaceStore.name || 'Foundry Effect',
-            description: 'Created with Foundry',
-            ttlMinutes: 60
-        }
-        if (effectZip) payload.effects = [effectZip]
-        
-        // Images and the screenshot go to the sharing service as files.
-        await attachShareFiles(payload, { images: renderer.images || [], screenshot })
-
-        // Upload to sharing service
-        const response = await fetch(SHARE_API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        })
-        
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}))
-            throw new Error(errorData.details || errorData.error || `HTTP ${response.status}`)
-        }
-        
-        const result = await response.json()
-        console.log('[Polymorphic] Share result:', result)
-        
-        // Open Polymorphic with the short code
-        const polymorphicUrl = `${POLYMORPHIC_URL}/?code=${result.code}`
-        window.open(polymorphicUrl, '_blank')
-        
-        toast.success('Opened in Polymorphic')
-    } catch (error) {
-        console.error('[Polymorphic] Error:', error)
-        toast.error(`Failed to open in Polymorphic: ${error.message}`)
+        console.error(`[${label}] Error:`, error)
+        toast.error(`Failed to open in ${label}: ${error.message}`)
     }
 }
 
