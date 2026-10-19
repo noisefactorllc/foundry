@@ -94,6 +94,18 @@ export async function routeSeance(page, url) {
     })
 }
 
+/**
+ * Serve handfish from a local build (HANDFISH_DIST, a handfish dist directory)
+ * instead of the CDN, to test a handfish change before it is released. The
+ * connect-agent dialog needs it until handfish publishes the dialog.
+ */
+export async function routeHandfishDist(page) {
+    const dist = process.env.HANDFISH_DIST && resolve(process.env.HANDFISH_DIST)
+    if (!dist) return
+    await page.route('https://handfish.noisefactor.io/0/handfish.esm.min.js', route =>
+        route.fulfill({ path: join(dist, 'handfish.esm.min.js'), contentType: 'text/javascript', headers: { 'Access-Control-Allow-Origin': '*' } }))
+}
+
 const RELAY = 'nf-agent/1'
 
 /**

@@ -47,18 +47,20 @@ export function markAgentReady() {
 
 /**
  * The Seance relay for this tab (see relay.js): its WebSocket class goes to the
- * Seance SDK, and sessionCreated marks a session this tab took online. Through
- * it this tab answers agent commands that arrive in the person's session.
+ * Seance SDK, sessionCreated marks a session this tab took online, and onAgent
+ * hears the first request from each agent. Through it this tab answers agent
+ * commands that arrive in the person's session.
  *
- * @param {{appVersion: string, uploadImage: (blob: Blob) => Promise<string>, BaseSocket?: typeof WebSocket}} options
+ * @param {{appVersion: string, uploadImage: (blob: Blob) => Promise<string>, onAgent?: Function, BaseSocket?: typeof WebSocket}} options
  * @returns {{ WebSocket: typeof WebSocket, sessionCreated: (sessionId: string) => void }}
  */
-export function createSeanceAgentRelay({ appVersion, uploadImage, BaseSocket }) {
+export function createSeanceAgentRelay({ appVersion, uploadImage, onAgent, BaseSocket }) {
     return createAgentRelay({
         app: 'foundry',
         appVersion,
         catalog,
         uploadImage,
+        onAgent,
         ...(BaseSocket ? { BaseSocket } : {}),
         async invoke(command, args) {
             if (SCHEMAS[command] && !REMOTE.has(command)) {

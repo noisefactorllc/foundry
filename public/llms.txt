@@ -24,9 +24,11 @@ anyway; other apps and other people's programs rely on them.
 Use this route when you can run shell commands. It works with the Foundry the
 person already has open: their program, their custom effect, their canvas.
 
-1. Ask the person to open https://foundry.noisedeck.app, choose **go online...**
-   at the end of the effect menu, click **Take Online**, and send you the
-   session link or the six-character code.
+1. Ask the person to open https://foundry.noisedeck.app, choose **connect
+   agent...** at the end of the effect menu, click **Go Online**, then **Copy
+   Prompt**, and paste the prompt to you. The prompt names this file and the
+   session link. (Without that dialog: **go online...**, **Take Online**, then
+   send the link or the six-character code.)
 2. Get the agent tool. It needs Node 22.4 or later and nothing else:
    `curl -fsSLO https://noisedeck.app/agent/seance-agent.mjs`
 3. Join: `node seance-agent.mjs join <link-or-code>`. It prints the session
@@ -76,8 +78,9 @@ How it works, so you can explain it to the person:
   file. A session holds at most 32 images; the tab takes at most 16 images in
   ten minutes (`IMAGE_LIMIT`, with `details.retryAfter` in seconds).
 - Images travel only as bytes. A program that names an image as base64 text is
-  refused with `IMAGE_AS_TEXT`: add the image with `image-put` and name it
-  `media(url: "image:<sha256>")`.
+  refused with `IMAGE_AS_TEXT`, and one that names media by an outside link
+  (which would make the person's browser fetch it) with `OUTSIDE_LINK`: add
+  the image with `image-put` and name it `media(url: "image:<sha256>")`.
 
 ### Move work between apps
 
@@ -339,6 +342,7 @@ shaders/src/lang/diagnostics.js:5-28.)
 | `REMOTE_UNAVAILABLE` | the command needs the person at the browser, and came through a session |
 | `IMAGE_LIMIT` | the tab already took 16 images in ten minutes. `details.retryAfter` is in seconds |
 | `IMAGE_AS_TEXT` | a session request or answer would carry an image as base64 text. Add the image with `image-put` and use `image:<sha256>` |
+| `OUTSIDE_LINK` | a session request names media by an outside link. Add the image with `image-put` and use `image:<sha256>` |
 | `IMAGE_UPLOAD_FAILED` | the tab could not add an image to the session (the session holds up to 32 images) |
 | `INTERNAL_ERROR` | unexpected failure |
 

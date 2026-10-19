@@ -73,8 +73,10 @@ export function refusalMessage(frame) {
  * @param {() => Array<{id: string, blob: Blob}>} options.heldImages - The image records this tab has.
  * @param {(records: Array<object>) => void} options.addImages - Keeps image records the session sent.
  * @param {(options: object) => ({WebSocket: typeof WebSocket, sessionCreated: (id: string) => void} | null)} [options.createAgentRelay]
+ * @param {HTMLElement} [options.agentDialog] - The handfish <agent-connect-dialog>.
+ * @param {(sessionUrl: string) => string} [options.agentPrompt] - The prompt that connects an agent to a session.
  */
-export function createOnlineCollaboration({ dialog, notify, getDsl, setDsl, getEffectText, setEffectText, compile, heldImages, addImages, createAgentRelay }) {
+export function createOnlineCollaboration({ dialog, notify, getDsl, setDsl, getEffectText, setEffectText, compile, heldImages, addImages, createAgentRelay, agentDialog, agentPrompt }) {
     const config = globalThis.__FOUNDRY_SEANCE_CONFIG__ || {}
     const sdkUrl = config.sdkUrl || DEFAULT_SEANCE_SDK_URL
     const seanceUrl = config.seanceUrl || DEFAULT_SEANCE_URL
@@ -98,12 +100,19 @@ export function createOnlineCollaboration({ dialog, notify, getDsl, setDsl, getE
     const connected = () => ['online', 'readonly'].includes(status())
 
     function sync() {
-        if (!dialog) return
         const state = status()
         const shown = state === 'online' || state === 'readonly'
-        dialog.state = shown ? state : (state === 'connecting' ? 'connecting' : 'offline')
-        dialog.sessionId = shown ? (online?.getSessionId?.() || '') : ''
-        dialog.sessionUrl = shown ? (online?.getShareUrl?.() || '') : ''
+        const view = shown ? state : (state === 'connecting' ? 'connecting' : 'offline')
+        const shareUrl = shown ? (online?.getShareUrl?.() || '') : ''
+        if (dialog) {
+            dialog.state = view
+            dialog.sessionId = shown ? (online?.getSessionId?.() || '') : ''
+            dialog.sessionUrl = shareUrl
+        }
+        if (agentDialog) {
+            agentDialog.state = view
+            agentDialog.prompt = shareUrl && agentPrompt ? agentPrompt(shareUrl) : ''
+        }
     }
 
     function writeUrl(sessionId) {
@@ -183,7 +192,13 @@ export function createOnlineCollaboration({ dialog, notify, getDsl, setDsl, getE
                 if (online) return online
                 // An agent in the session reaches this tab over the SDK's own
                 // socket: the app wraps the socket class the SDK would use.
-                agentRelay = createAgentRelay?.({ uploadImage: blob => online.uploadImage(blob) }) || null
+                agentRelay = createAgentRelay?.({
+                    uploadImage: blob => online.uploadImage(blob),
+                    // An agent's first request: the connect-agent dialog confirms it.
+                    onAgent: () => {
+                        if (agentDialog) agentDialog.connected = true
+                    },
+                }) || null
                 online = sdk.createOnlineDslLayer({
                     seanceUrl,
                     location,
@@ -326,6 +341,7 @@ export function createOnlineCollaboration({ dialog, notify, getDsl, setDsl, getE
         sessionDocs = null
         sessionText.clear()
         if (online) online.goOffline()
+        if (agentDialog) agentDialog.connected = false
         writeUrl(null)
         sync()
         notify('online session closed', 'info')
@@ -360,6 +376,10 @@ export function createOnlineCollaboration({ dialog, notify, getDsl, setDsl, getE
     }
 
     dialog?.addEventListener('take-online', () => { takeOnline() })
+    // The connect-agent dialog's Go Online step takes the work online the same way.
+    agentDialog?.addEventListener('go-online', () => { takeOnline() })
+    agentDialog?.addEventListener('copy-failed', () => notify('failed to copy the prompt', 'error'))
+    agentDialog?.addEventListener('connected', () => notify('Agent connected', 'success'))
     dialog?.addEventListener('join-session', event => { joinSession(event.detail?.sessionId) })
     dialog?.addEventListener('go-offline', () => goOffline())
     dialog?.addEventListener('copy-url', async event => {
@@ -374,8 +394,15 @@ export function createOnlineCollaboration({ dialog, notify, getDsl, setDsl, getE
     })
     sync()
 
+    /** "connect agent...": the dialog opens at the step the session has reached. */
+    function showAgentDialog() {
+        sync()
+        agentDialog?.show?.()
+    }
+
     return {
         takeOnline,
+        showAgentDialog,
         joinSession,
         joinFromUrlIfPresent,
         goOffline,

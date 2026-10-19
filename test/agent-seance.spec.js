@@ -2,7 +2,9 @@
 // that tab through the Seance agent relay (public/js/agent/relay.js).
 //
 // Starts Foundry and a local Seance server (see test/seance-local.js for
-// SEANCE_ROOT, SEANCE_PYTHON and SEANCE_DIST_DIR) on free local ports. The
+// SEANCE_ROOT, SEANCE_PYTHON and SEANCE_DIST_DIR) on free local ports; the
+// connect-agent dialog comes from a handfish build in HANDFISH_DIST until
+// handfish publishes it. The
 // person's tab goes online through "go online..."; an agent written as the
 // shared agent tool behaves joins from Node. Only the owner's tab answers,
 // images travel as bytes, and commands that need the person at the browser
@@ -17,7 +19,7 @@ import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { deflateSync } from 'node:zlib'
-import { SeanceAgentClient, freePort, poll, routeSeance, startSeanceServer } from './seance-local.js'
+import { SeanceAgentClient, freePort, poll, routeHandfishDist, routeSeance, startSeanceServer } from './seance-local.js'
 
 const FOUNDRY = fileURLToPath(new URL('..', import.meta.url))
 const BROWSER = process.env.BROWSER || 'chromium'
@@ -86,6 +88,7 @@ async function setUp(t) {
     const open = async (url, sent = []) => {
         const context = await browser.newContext({ viewport: { width: 1280, height: 800 } })
         const page = await context.newPage()
+        await routeHandfishDist(page)
         await routeSeance(page, seance.url)
         page.on('websocket', socket => socket.on('framesent', frame => sent.push(String(frame.payload))))
         await page.goto(url)
@@ -208,6 +211,9 @@ test(`${BROWSER}: an agent in the online session drives the owner's Foundry tab`
     const pixel = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=='
     const asText = await agent.request('setProgram', { dsl: `search synth\nmedia(url: "${pixel}").write(o0)\nrender(o0)` }, { to: tab })
     assert.equal(asText.envelope.error.code, 'IMAGE_AS_TEXT')
+    // Nor does a session make the person's browser fetch an outside link.
+    const linked = await agent.request('setProgram', { dsl: 'search synth\nmedia(url: "https://example.com/a.png").write(o0)\nrender(o0)' }, { to: tab })
+    assert.equal(linked.envelope.error.code, 'OUTSIDE_LINK')
 
     // Commands that need the person at the browser stay in the tab.
     for (const command of ['exportZip', 'listSavedEffects']) {
@@ -254,4 +260,43 @@ test(`${BROWSER}: the tab that took the session online answers again after a rel
     const state = await agent.request('getState', {}, { to: again.from })
     assert.equal(state.envelope.ok, true)
     assert.equal(state.from, again.from)
+})
+
+test(`${BROWSER}: connect agent walks the person through going online, copying the prompt and the agent joining`, { timeout: 300000 }, async t => {
+    const { origin, agent, open } = await setUp(t)
+    const page = await open(origin)
+    // The prompt the dialog copies, as the person's clipboard receives it.
+    await page.evaluate(() => {
+        window.__copied = []
+        Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: text => { window.__copied.push(text); return Promise.resolve() } } })
+    })
+    await page.evaluate(() => document.getElementById('connectAgentMenuItem').click())
+    const dialog = page.locator('#agentConnectDialog dialog')
+    await dialog.waitFor({ state: 'visible' })
+    const states = () => dialog.locator('.hf-agent-step').evaluateAll(items => items.map(item => item.dataset.state))
+    assert.deepEqual(await states(), ['active', 'pending', 'pending'])
+
+    await dialog.locator('[data-action="go-online"]').click()
+    await poll(states, value => value.join() === 'done,active,pending', { label: 'the Go Online step done' })
+    const code = new URL(page.url()).searchParams.get('seance')
+    assert.ok(code)
+
+    await dialog.locator('[data-action="copy-prompt"]').click()
+    await poll(states, value => value.join() === 'done,done,active', { label: 'the Copy Prompt step done' })
+    const [prompt] = await page.evaluate(() => window.__copied)
+    assert.equal(prompt, [
+        'Connect to my Foundry session and help me with it.',
+        'Read https://foundry.noisedeck.app/llms-full.txt first.',
+        'Then run:',
+        '  curl -fsSLO https://noisedeck.app/agent/seance-agent.mjs',
+        `  node seance-agent.mjs join ${origin}/?seance=${code}`,
+    ].join('\n'))
+
+    // The agent follows the prompt's last line; its first request confirms it.
+    const joinUrl = prompt.trim().split('\n').at(-1).trim().split(' ').at(-1)
+    await agent.join(new URL(joinUrl).searchParams.get('seance'))
+    assert.equal((await agent.request('describe')).app, 'foundry')
+    await poll(states, value => value.join() === 'done,done,done', { label: 'the Confirm step done' })
+    await dialog.waitFor({ state: 'hidden', timeout: 10000 })
+    await page.locator('.toast-message').filter({ hasText: 'Agent connected' }).waitFor({ state: 'visible' })
 })

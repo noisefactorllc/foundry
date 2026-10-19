@@ -14,7 +14,13 @@
  *
  * Images are images: an image result is uploaded to the session as its own
  * bytes, and the reply names it by its SHA-256. No image travels as text: a
- * request or an answer that carries a base64 image is refused.
+ * request or an answer that carries a base64 image is refused. A request may
+ * not name media by an outside link either, which would make the person's
+ * browser fetch it: agents add images to the session and name them
+ * `image:<sha256>`.
+ *
+ * The first request from each participant tells the app that an agent has
+ * connected (`onAgent`), so it can confirm the connection to the person.
  *
  * The relay reads and writes the SDK's socket through the WebSocket class it
  * hands to the SDK, so the SDK itself needs no change.
@@ -47,6 +53,7 @@ const MAX_PENDING = 8
 const IMAGE_LIMIT = 16
 const IMAGE_WINDOW_MS = 10 * 60 * 1000
 const IMAGE_TEXT = /data:image\/[^;,"'\s]*;base64,/i
+const OUTSIDE_LINK = /\burl\s*:\s*\\?["']\s*(?:https?:)?\/\//i
 const CREATED_KEY = 'nf-agent-relay:created'
 
 function readCreated() {
@@ -134,11 +141,13 @@ function newTabId() {
  * @param {() => Array<object>} options.catalog - Command descriptions for `describe`.
  * @param {(command: string, args: object) => Promise<{envelope: object, image?: Blob}>} options.invoke
  * @param {(blob: Blob) => Promise<string>} options.uploadImage - Uploads bytes to the session; returns the image id.
+ * @param {(agent: {userId: string, username: string}) => void} [options.onAgent] - Called once for each
+ *   participant whose request this tab answers in a session.
  * @param {typeof WebSocket} [options.BaseSocket]
  * @returns {{ WebSocket: typeof WebSocket, tabId: string, sessionCreated: (sessionId: string) => void }}
  *   Call sessionCreated with the session id once this tab has taken a session online.
  */
-export function createAgentRelay({ app, appVersion, catalog, invoke, uploadImage, BaseSocket = globalThis.WebSocket }) {
+export function createAgentRelay({ app, appVersion, catalog, invoke, uploadImage, onAgent, BaseSocket = globalThis.WebSocket }) {
     const tabId = newTabId()
     const assemble = createAssembler()
     const uploads = []
@@ -148,6 +157,7 @@ export function createAgentRelay({ app, appVersion, catalog, invoke, uploadImage
     let session = null
     let pending = 0
     const created = new Set(readCreated())
+    const agents = new Set()
     let tokens = SEND_BURST
     let tokensAt = Date.now()
     let chain = Promise.resolve()
@@ -226,6 +236,9 @@ export function createAgentRelay({ app, appVersion, catalog, invoke, uploadImage
         } else if (IMAGE_TEXT.test(JSON.stringify(args ?? {}))) {
             envelope = makeFailure(command, 'IMAGE_AS_TEXT',
                 'Images travel through a session as bytes, never as text. Add the image with image-put and refer to it as image:<sha256>.')
+        } else if (OUTSIDE_LINK.test(JSON.stringify(args ?? {}))) {
+            envelope = makeFailure(command, 'OUTSIDE_LINK',
+                'A program from a session cannot name media by an outside link. Add the image with image-put and refer to it as image:<sha256>.')
         } else {
             let out
             try {
@@ -249,6 +262,7 @@ export function createAgentRelay({ app, appVersion, catalog, invoke, uploadImage
         if (frame.type === 'welcome') {
             self = frame.you?.user_id || null
             owner = frame.owner?.user_id || null
+            if (frame.session !== session) agents.clear()
             session = frame.session || null
         } else if (frame.type === 'owner-changed') {
             // The new owner travels in the envelope (Seance protocol section 4).
@@ -289,6 +303,14 @@ export function createAgentRelay({ app, appVersion, catalog, invoke, uploadImage
         if (!assembled.done || !assembled.body || typeof assembled.body !== 'object') return
         // A flood of requests waits for no one: past a few, the tab drops them.
         if (pending >= MAX_PENDING) return
+        if (typeof frame.user_id === 'string' && !agents.has(frame.user_id)) {
+            agents.add(frame.user_id)
+            try {
+                onAgent?.({ userId: frame.user_id, username: frame.username || '' })
+            } catch (err) {
+                console.warn('[agent relay] onAgent failed:', err)
+            }
+        }
         pending += 1
         respond({ ...frame, body: assembled.body }, target).finally(() => { pending -= 1 })
     }
@@ -299,7 +321,6 @@ export function createAgentRelay({ app, appVersion, catalog, invoke, uploadImage
             socket = this
             self = null
             owner = null
-            session = null
             this.addEventListener('message', onMessage)
             this.addEventListener('close', () => {
                 if (socket === this) socket = null

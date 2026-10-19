@@ -18,6 +18,9 @@ import { shareModal } from './ui/share-modal.js'
 import { loadFromCode, getCodeFromUrl, attachShareFiles } from './sharingLoader.js'
 import { bootstrapAgent, markAgentReady, createSeanceAgentRelay } from './agent/index.js'
 import { createOnlineCollaboration } from './onlineCollaboration.js'
+// A namespace import: an older handfish without the connect-agent dialog
+// still loads the app, and the "connect agent..." item stays hidden.
+import * as handfish from 'handfish'
 import {
     errorHandler,
     handleError,
@@ -1644,6 +1647,7 @@ if (menuBarEl) {
                             },
                         },
                         { id: 'goOnlineMenuItem', label: 'go online...', onSelect: () => seanceDialog?.show?.() },
+                        { id: 'connectAgentMenuItem', label: 'connect agent...', hidden: () => !customElements.get('agent-connect-dialog'), onSelect: () => onlineCollaboration.showAgentDialog() },
                     ],
                 },
             ],
@@ -2257,6 +2261,12 @@ function setWorkspaceEffectText(text) {
 
 const onlineCollaboration = createOnlineCollaboration({
     dialog: seanceDialog,
+    agentDialog: document.getElementById('agentConnectDialog'),
+    agentPrompt: sessionUrl => handfish.agentConnectPrompt?.({
+        app: 'Foundry',
+        contractUrl: 'https://foundry.noisedeck.app/llms-full.txt',
+        sessionUrl,
+    }) || '',
     notify: (message, type = 'info') => toast.show(message, type),
     getDsl: () => dslEditor.value,
     setDsl: setProgramText,
@@ -2265,7 +2275,7 @@ const onlineCollaboration = createOnlineCollaboration({
     compile: ({ remote } = {}) => remote ? fromSession(compileAndRun) : compileAndRun(),
     heldImages,
     addImages,
-    createAgentRelay: ({ uploadImage }) => createSeanceAgentRelay({ appVersion: FOUNDRY_VERSION, uploadImage }),
+    createAgentRelay: ({ uploadImage, onAgent }) => createSeanceAgentRelay({ appVersion: FOUNDRY_VERSION, uploadImage, onAgent }),
 })
 
 // Undo and redo restore through the workspace's 'restore' event; wait for it.
