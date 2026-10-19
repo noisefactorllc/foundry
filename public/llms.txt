@@ -1,0 +1,354 @@
+# Foundry -- Agent API
+
+> Foundry is a browser-based effects editor built on the Noisemaker engine. In
+> Foundry a person writes two things: a program (Polymorphic DSL text, kept as
+> the workspace file dsl.txt) and, when they want one, a custom effect of their
+> own (definition.json, GLSL shaders in glsl/, WGSL shaders in wgsl/, and
+> help.md) that the program calls from the `user` namespace. An agent can join
+> the person's own open Foundry over Seance, the Noise Factor collaboration
+> service, or drive Foundry in a browser it controls, and read, write and run
+> both. This file is the contract for software agents that control Foundry.
+
+The full contract adds a reference for every command and its arguments:
+https://foundry.noisedeck.app/llms-full.txt
+
+The DSL and the effect format are specified by the Noisemaker contract:
+https://noisemaker.app/llms-full.txt. The conventions that matter most when
+you write Foundry code are collected below, each with the Noisemaker source
+that defines it. Foundry does not enforce them: a program or a shader that
+breaks one still compiles and runs if the engine accepts it. Follow them
+anyway; other apps and other people's programs rely on them.
+
+## Connect to the person's Foundry
+
+Use this route when you can run shell commands. It works with the Foundry the
+person already has open: their program, their custom effect, their canvas.
+
+1. Ask the person to open https://foundry.noisedeck.app, choose **go online...**
+   at the end of the effect menu, click **Take Online**, and send you the
+   session link or the six-character code.
+2. Get the agent tool. It needs Node 22.4 or later and nothing else:
+   `curl -fsSLO https://noisedeck.app/agent/seance-agent.mjs`
+3. Join: `node seance-agent.mjs join <link-or-code>`. It prints the session
+   name (`foundry`), the open app tabs and the session documents. A background
+   process keeps the session joined between commands.
+
+| Command | What it does |
+|---|---|
+| `node seance-agent.mjs commands` | Lists Foundry's commands and their arguments. |
+| `node seance-agent.mjs program [--json]` | Prints the session's program text (`--json` adds its `rev`). |
+| `node seance-agent.mjs validate <file>` | Checks a program (`-` reads standard input). |
+| `node seance-agent.mjs set <file>` | Runs a program in the person's tab (setProgram). |
+| `node seance-agent.mjs look [--size N] [--format png\|jpg] [--out FILE]` | Saves an image of the person's canvas. Prints its path. Open the file with your image tool. |
+| `node seance-agent.mjs call <command> [JSON]` | Runs any command, for example `call writeFile '{"path":"glsl/glow.glsl","content":"..."}'`. |
+| `node seance-agent.mjs wait [--since REV] [--timeout S]` | Waits for the person to change the program, then prints it. |
+| `node seance-agent.mjs image-put <file>` | Adds a PNG, JPEG, GIF or WebP file to the session. Prints `image:<id>`. |
+| `node seance-agent.mjs transfer <from> <to>` | Copies the program and its images from one joined session to another. |
+| `node seance-agent.mjs leave` / `stop` | Leaves the session / stops the background process. |
+
+Every command prints JSON (`program` prints text). The exit code is 0 for
+success, 1 when Foundry refused the command (read `result.envelope.error.code`),
+and 2 when the tool could not run it (read `error.code`). `node
+seance-agent.mjs help` lists every option and the tool's own error codes.
+
+How it works, so you can explain it to the person:
+
+- The tool joins the session as an anonymous participant, which the person
+  sees join. It runs commands in the tab that took the work online, through the
+  session, with the same paths as the person's own edits: a program compiles as
+  Cmd+Enter compiles it, and the change can be undone. No other tab answers,
+  even one that becomes the session's owner after the person's tab leaves.
+- The session holds two documents: `main`, the program, and `effect`, the
+  custom effect as Portable effect JSON (empty when there is none). Through the
+  session, getProgram, listFiles and readFile answer from those documents, not
+  from text the person has not run yet. The workspace's other files and the
+  person's saved effects stay in their tab.
+- Everyone in the session receives every answer, and anyone who can edit the
+  session can send commands to that tab. So the person's saved effects
+  (`listSavedEffects`, `loadSavedEffect`, `saveEffect`, `deleteSavedEffect`),
+  the ZIP download (`exportZip`), the rendering backend (`setBackend`) and
+  sharing links (`importComposition`) are not reachable through a session:
+  they answer `REMOTE_UNAVAILABLE`, and `commands` marks them.
+  Suggest that the person goes offline (**Go Offline** in the same dialog) when
+  you are done.
+- `look` asks the person's tab for an image of its canvas as it is; the tab
+  adds the image to the session as its own bytes, and the tool saves it as a
+  file. A session holds at most 32 images; the tab takes at most 16 images in
+  ten minutes (`IMAGE_LIMIT`, with `details.retryAfter` in seconds).
+- Images travel only as bytes. A program that names an image as base64 text is
+  refused with `IMAGE_AS_TEXT`: add the image with `image-put` and name it
+  `media(url: "image:<sha256>")`.
+
+### Move work between apps
+
+Foundry sessions use the same document dialect as Noisedeck, Polymorphic and
+Visualize sessions, so `transfer` moves a program and its images between a
+Foundry session and theirs, in either direction. The target app checks the
+program and refuses one that it cannot compile.
+
+A program that calls the custom effect (`search user ...`) runs only where that
+effect is. `transfer` copies the program text, not the effect. To move the
+effect to another Foundry or to Shade, which take the same Portable effect, read
+it and set it with the program:
+
+```sh
+node seance-agent.mjs call foundry getProgram > work.json
+# take result.envelope.result.dsl and .effect from work.json, then:
+node seance-agent.mjs call shade setProgram '{"dsl":"...","effect":{...}}'
+```
+
+Noisedeck, Polymorphic and Visualize take no custom effect through a session.
+The person can open the program with its effect and images in one of them
+with effect > edit in Noisedeck..., Noodles..., Polymorphic... or Shade....
+
+## Control Foundry in a browser you drive
+
+Use this route when you control a browser yourself. Open
+https://foundry.noisedeck.app and use the first route your browser tool
+supports:
+
+1. WebMCP: discover the page tools named `foundry_getState`,
+   `foundry_setProgram`, and so on. Each tool has the argument schema in the
+   full contract and returns the envelope below as text. `getThumbnail` also
+   returns an image content block, without duplicating its bytes in text.
+2. Page JavaScript: call `window.FoundryAgent` directly. Wait until the object
+   and method exist. Every command waits for startup automatically; awaiting
+   `window.FoundryAgent.ready` also works. Return the fields you need, not the
+   whole API object.
+
+```js
+const A = window.FoundryAgent
+const env = await A.getProgram()
+return { dsl: env.result.dsl, effect: env.result.effect?.func ?? null }
+```
+
+All routes use the same serialized commands and validation. A tool that only
+fetches HTML cannot render Foundry; a browser with WebGL2 is required.
+
+---
+
+## Write a program
+
+1. Find effects with `searchEffects`. Read their parameters with
+   `getEffectDefinition`. Copy parameter names from it; do not guess them.
+2. Check the program with `validateProgram` and fix every diagnostic with
+   severity `error`.
+3. Run it with `setProgram` and look at it with `getThumbnail` (the agent
+   tool's `look`).
+
+```js
+const A = window.FoundryAgent
+const dsl = 'search synth, filter\n\nnoise(scaleX: 40, scaleY: 40)\n  .vignette()\n  .write(o0)\n\nrender(o0)\n'
+const check = await A.validateProgram({ dsl })
+if (!check.result.valid) return check.result.diagnostics
+return (await A.setProgram({ dsl })).ok
+```
+
+## Write a custom effect
+
+A custom effect is a Portable effect: the fields of definition.json plus
+`shaders: { <program>: { glsl, wgsl } }` and `help`. Foundry keeps it as
+workspace files and registers it as `user.<func>`.
+
+- Start from a library effect with `loadEffect` (file > import effect from
+  library...) or from synth/solid with `newEffect`; both replace the workspace.
+- Change one file with `writeFile`, as the code editor does: the effect is
+  registered again and the program compiles. `compiled.error` reports a shader
+  that does not compile; the file stays written.
+- Or set the whole effect and its program at once with
+  `setProgram({ dsl, effect })`. A refused program puts the previous effect
+  back.
+- `setBackend` renders the WGSL shaders with WebGPU, or the GLSL shaders with
+  WebGL2. Write and check both: the other Noise Factor apps and the desktop
+  apps pick a backend by browser.
+
+```js
+const A = window.FoundryAgent
+const effect = {
+    name: 'stripes', func: 'stripes', description: 'Moving stripes',
+    globals: { count: { type: 'int', default: 8, min: 1, max: 64, uniform: 'count' } },
+    passes: [{ name: 'render', program: 'stripes', inputs: {}, outputs: { fragColor: 'outputTex' } }],
+    shaders: { stripes: { glsl: `#version 300 es
+precision highp float;
+uniform vec2 resolution;
+uniform float time;
+uniform int count;
+out vec4 fragColor;
+const float TAU = 6.28318530718;
+void main() {
+    vec2 uv = gl_FragCoord.xy / resolution;
+    float v = 0.5 + 0.5 * sin(TAU * (uv.x * float(count) + time));
+    fragColor = vec4(vec3(v), 1.0);
+}
+` } },
+}
+return (await A.setProgram({ dsl: 'search user\nstripes(count: 12).write(o0)\nrender(o0)\n', effect })).ok
+```
+
+## Noisemaker conventions
+
+Sources are the Noisemaker repository (paths relative to its root, line
+numbers at commit e9235dd5, 2026-10-19) and its contract,
+https://noisemaker.app/llms-full.txt (section names). Portable means the
+Portable effect format, https://github.com/noisefactorllc/portable.
+
+### Program structure
+
+- A program starts with one `search ns, ...` line; nothing but comments may come before it, and every namespace must exist. A wrong one is P004. (source: shaders/src/lang/parser.js:533-619; docs/shaders/language.rst:352-368)
+- A name without a namespace takes the first match in search order. Never write a namespace into a call (`synth.noise()` is P007); use `from(ns, call())` for one call. (source: shaders/src/lang/validator.js:966-986; shaders/src/lang/parser.js:1013-1025)
+- The namespaces are io, classicNoisedeck, synth, mixer, filter, render, points, synth3d, filter3d and user. A custom effect is always `user.<func>`, so its program says `search user, ...`. (source: shaders/src/runtime/tags.js:153, 253; shaders/src/renderer/canvas.js:1530, 1566-1588; docs/coding-agents.rst:121)
+- Every chain ends with `.write(oN)`; a generator chain without one is S006. `render(oN)` chooses what is shown and is not a write. (source: docs/shaders/language.rst:89; shaders/src/lang/validator.js:744-750)
+- A generator (starter) comes first in its chain, and only there; anything else is S005. (source: shaders/src/lang/validator.js:1005-1017; docs/shaders/language.rst:286-292)
+- Do not mix positional and keyword arguments in one call (P007), except in `midi()` and `audio()`. (source: noisemaker.app/llms-full.txt "DSL program > Act")
+- Arithmetic folds to a constant while parsing: an argument such as `time * 0.5` is P001. (source: docs/shaders/language.rst:158)
+- `if`, `elif`, `else`, `break`, `continue` and `return` parse, but the runtime does not run them: compiling fails with ERR_EXPANSION_FAILED. (source: shaders/src/runtime/expander.js:145-152)
+- A deprecated effect still runs and warns S008; use the effect it names instead. (source: shaders/src/renderer/canvas.js:1648-1650; shaders/src/lang/effectAliases.js:1-36)
+
+### Surfaces
+
+- `o0` to `o7` are the only output surfaces (`o8` is L004). They are double-buffered, screen-sized and rgba16f. (source: shaders/src/lang/lexer.js:139; docs/shaders/pipeline.rst:331-344)
+- `o0`-`o7`, `vol0`-`vol7` and `geo0`-`geo7` belong to the program. An effect definition never hardwires them; it keeps its state in its own `textures` or in `global_*` names. (source: docs/shaders/pipeline.rst:366-374; AGENTS.md:28)
+- `read(oN)` is legal only at the head of a chain or as the value of a `surface` parameter; `.read()` later in a chain is S001. (source: shaders/src/lang/validator.js:766-774)
+- A surface read before it is written in a frame shows the previous frame: that is how feedback works. (source: docs/shaders/language.rst:806-814; docs/shaders/pipeline.rst:379-390)
+
+### Looping
+
+- The `time` uniform is a loop phase from 0 to 1, not seconds: the renderer passes (elapsed seconds mod loop length) divided by the loop length, which is 10 seconds unless changed. (source: shaders/src/renderer/canvas.js:271, 761-764, 925-929; docs/shaders/pipeline.rst:74-77)
+- `deltaTime` is in the same units; when time wraps it is 1/600. `frame` counts every rendered frame and never wraps, so it does not loop. (source: shaders/src/runtime/pipeline.js:2304-2310, 2428, 2441)
+- For a seamless loop, every time-driven term must be equal at time 0 and time 1: drive motion with whole numbers of cycles per loop, such as `sin(TAU * k * time)` with integer k, and sample noise on a circle in time. Neither Noisemaker nor Portable states this as a rule; Portable's shader guide and the engine's own synth/noise effect follow it. (source: Portable docs/SHADERS.md:95-105; shaders/effects/synth/noise/glsl/noise.glsl:76-78, 517-522)
+- `osc()` repeats seamlessly when its `speed` is a whole-number literal and the other fields are literal or boundary-matched. A fractional or automated speed gives no such guarantee. The phase is time times speed plus offset, with offset in cycles. (source: docs/shaders/language.rst:519-522, 560-561; shaders/src/runtime/pipeline.js:335-341)
+- An automated `speed` is frequency modulation integrated from 0 to time, so seeking never depends on earlier frames, but it does not loop by itself. (source: noisemaker.app/llms-full.txt "Parameters and globals > Act")
+- Live MIDI and audio follow their inputs and wall-clock time, not the loop. (source: docs/shaders/midi-audio.rst:618-621)
+- Feedback surfaces, `loopBegin`/`loopEnd` (an accumulator, not time looping) and `onUpdate` hooks that accumulate state carry the previous frame, so their output depends on history rather than on time alone. (source: shaders/effects/render/loopBegin/definition.js:1-60; docs/shaders/effects.rst:522-523)
+- `speed` has no engine meaning: it is an ordinary parameter, and an effect that multiplies time by it loops only at whole-number values. (source: shaders/effects/synth/noise/definition.js:165-176)
+
+### Arg binding
+
+- Each key of `globals` is a DSL parameter, in order: append new optional parameters at the end. Every global becomes a DSL argument (a `vec4` becomes a DSL `color`), with its `default`, `min`, `max`, `uniform` and `choices`. (source: shaders/src/renderer/canvas.js:1593-1655; noisemaker.app/llms-full.txt "Parameters and globals > Act")
+- An omitted argument takes `default`. A number outside `min`/`max` is clamped and warns S002. An unknown keyword is S001. (source: shaders/src/lang/validator.js:1026-1029, 1395-1404, 1500)
+- The shader uniform is `uniform` when set, else the parameter name. Declare every uniform your shader reads: a pass starts from the uniforms of the effects before it in the chain, so an undeclared one can silently take another effect's value. (source: shaders/src/runtime/expander.js:639-643, 751-770, 808-812)
+- A pass's `uniforms` map renames a global for one program (`{ shaderName: "globalName" }`) or sets a literal. (source: shaders/src/runtime/expander.js:850-880; shaders/src/runtime/uniform-aliases.js:1-32)
+- Never name a global after an engine uniform (time, resolution, aspect, frame, ...): a pass uniform wins over the engine's. Two globals cannot share one `uniform` name. (source: shaders/src/runtime/backends/webgl2.js:1678-1706; Portable docs/PARAMETERS.md:243-252; shaders/src/runtime/effect-validator.js:648-655)
+- A global with `define: "NAME"` is compiled into the shader (GLSL `#define`, WGSL `const`); changing it compiles another program. Use it for choices that remove code, not for values that animate; an animatable selector uses per-pass `defines`. (source: shaders/src/runtime/expander.js:404-458, 682-697; docs/shaders/integration.rst:619-620)
+- `choices` make an enum `<namespace>.<func>.<param>` (for a custom effect `user.<func>.<param>`); the DSL takes the bare choice name, the full path or a `let` of one. Choice names do not start with a digit and use no hyphens or spaces. A numeric `default` must be one of the choices. (source: shaders/src/renderer/canvas.js:1605-1627; docs/shaders/language.rst:373-382; Portable docs/PARAMETERS.md:185-188; shaders/src/runtime/effect-validator.js:682-684)
+- Surface inputs: each key of a pass's `inputs` is the shader's sampler or texture name. `inputTex` is the chain's input; a `surface` global named in `inputs` is a `tex:`-style argument (default `none`). (source: noisemaker.app/llms-full.txt "Passes and render graph > Act"; shaders/effects/mixer/blendMode/definition.js:11-15, 53-60)
+- Parameter aliases are retired: a Portable effect with `paramAliases` does not register, and old names such as `mixAmt` fail with S001. (source: shaders/src/renderer/canvas.js:1564; docs/shaders/integration.rst:813)
+- `osc(...)`, `midi(...)` and `audio(...)` bind a numeric parameter, directly or through `let`. Their `min` and `max` are fractions (0 to 1) of that parameter's range, which comes from the global's `min` and `max` (0 to 100 when missing), so give every automatable parameter a real range. They nest up to 8 levels; bad arguments are P003. (source: docs/shaders/language.rst:625-628, 633-713; shaders/src/runtime/expander.js:777-794; shaders/src/runtime/pipeline.js:180-183, 2523-2530)
+- MIDI and audio selectors (channel, mode, cc, zone, band, device) are literals or `let` aliases of literals; MIDI channels are 1-16, audio channels 1-32. A missing or disconnected input evaluates to `min`. (source: noisemaker.app/llms-full.txt "DSL program > Act"; docs/shaders/midi-audio.rst)
+- Shaders may read the engine's `audioWaveform`, `audioSpectrum` and `midiClockCount` uniforms and a `midiNoteGrid` input. (source: shaders/src/renderer/canvas.js:821-860; shaders/src/runtime/pipeline.js:2495-2512)
+
+### Dead branch pruning
+
+- The compiler prunes no graph branches: every chain becomes passes and runs every frame, whether or not anything reads or renders its surface. Remove chains you do not need; `.write(none)` drops only the copy. (source: shaders/src/runtime/compiler.js:18-66; shaders/src/runtime/expander.js:145-1281, 227-228; shaders/src/runtime/pipeline.js:2335-2384)
+- What the compiler calls liveness is texture lifetime for reuse, not reachability. (source: shaders/src/runtime/resources.js:11-103)
+- Pruning that does exist is yours to write: a `define` global removes shader code at compile time, and a pass with `conditions.runIf`/`skipIf` (strict equality on a uniform, checked every frame) is skipped. Clone a pass with per-pass `defines` to prune per variant. (source: shaders/effects/synth/noise/definition.js:34-36, 122-124; shaders/src/runtime/pipeline.js:2596-2626; shaders/effects/render/pointsRender/definition.js:309-314)
+- The drivers drop uniforms and bindings a shader never uses, so a declared parameter whose uniform the shader does not read does nothing and reports nothing. (source: shaders/src/runtime/backends/webgl2.js:1103-1124; shaders/src/runtime/backends/webgpu.js:1918-1938)
+
+### Effect definitions
+
+- Write `func` as a DSL identifier, and write `passes`: each pass names a `program`, and every program has its shader source, in every language the effect has. (source: shaders/src/renderer/canvas.js:1508-1564; Portable docs/FORMAT.md:85-92)
+- A program `p` is `glsl/p.glsl` and `wgsl/p.wgsl`. (source: Portable docs/FORMAT.md:377-389)
+- An effect is a starter (generator) when no pass input reads the chain (`inputTex`, `o0`-`o7`, ...), unless `starter` says otherwise. (source: shaders/src/renderer/canvas.js:1569-1571)
+- Tags come from the engine's list (color, distort, noise, pattern, ...). Reserved texture names are inputTex, outputTex, inputTex3d, outputTex3d, inputGeo and outputGeo. (source: shaders/src/runtime/tags.js:133; docs/shaders/effects.rst:862-897)
+- `defaultProgram` is a whole program, `search user, ...` included. (source: Portable docs/FORMAT.md:364-368)
+
+### Shaders
+
+- GLSL: the engine adds `#version 300 es`, highp precision and the defines; write `out vec4 fragColor;`, `void main()` and `uv = gl_FragCoord.xy / resolution`. (source: shaders/src/runtime/backends/webgl2.js:1081-1101; docs/coding-agents.rst:67-92)
+- The engine's uniforms are time, deltaTime, frame, resolution, aspect, aspectRatio, aspectInv, tileOffset, fullResolution, invFullResolution and renderScale. A tile-aware shader uses `(gl_FragCoord.xy + tileOffset) / fullResolution`. (source: shaders/src/runtime/pipeline.js:2435-2512; docs/shaders/tile-rendering.rst:4, 23-25)
+- WGSL: `@fragment fn main(@builtin(position) ...) -> @location(0) vec4<f32>`; uniforms are bindings in group 0, one per uniform or one struct whose field names are the uniform names; textures are `texture_2d<f32>` named after the inputs key, with a `sampler`. (source: shaders/src/runtime/default-shaders.js:20-43; AGENTS.md:31; shaders/src/runtime/backends/webgpu.js:1528-1545, 2791-2841)
+- Check that GLSL and WGSL render the same image; the sources disagree on flipping y in WGSL starters. (source: Portable docs/SHADERS.md:166-178; noisemaker.app/llms-full.txt "Cross-backend parity")
+
+### Images
+
+- `media()` draws an image; Foundry names one as `url: "image:<sha256>"`, where the id is the SHA-256 of the image bytes (PNG, JPEG, GIF or WebP). `url` is not an engine argument: the app removes it before compiling and binds the image itself. (source: shaders/effects/synth/media/definition.js:18, 168-171; sharing.noisedeck.app/js/portableImages.js)
+
+---
+
+## Keep results small
+
+- Every envelope includes `state`. Remove it when you do not need it.
+- In page JavaScript, `getThumbnail` returns base64 image bytes; keep
+  `maxDimension` small. WebMCP returns the image as an image block, and the
+  agent tool saves it as a file and prints its path.
+
+---
+
+## The envelope
+
+Every command response, success or failure, has this shape:
+
+```js
+// success
+{ ok: true, command: "setProgram", apiVersion: "1.0", result: { /* command-specific */ }, state: { /* snapshot */ }, warnings?: [ /* ... */ ] }
+
+// failure
+{ ok: false, command: "setProgram", apiVersion: "1.0", error: { code: "INVALID_PROGRAM", message: "...", details: { diagnostics: [ /* ... */ ] } }, state: { /* snapshot */ } }
+```
+
+Commands run one at a time, in the order you call them. Every command rejects
+an argument that it does not declare, so a command with no arguments accepts
+only `{}`.
+
+Warnings do not stop a command: `IMAGE_MISSING` (the program names an
+`image:<id>` that the tab does not have and the session does not hold) and
+`EFFECT_DEFINITION_INVALID` (definition.json is not valid JSON).
+
+## State snapshot
+
+```
+state: {
+    schemaVersion,
+    program:   { chars, running },          // running: the editor text is the program that runs
+    workspace: { name, files, effect, images }, // effect: the custom effect's func, or null
+    compile:   { ok, error? } | null,       // the latest compile
+    canvas:    { width, height },
+    playback:  { playing, loopDuration },   // loopDuration in seconds
+    backend,                                // "webgl2" or "webgpu"
+    history:   { canUndo, canRedo }
+}
+```
+
+## Diagnostics
+
+`validateProgram` and a refused `setProgram` return Noisemaker compiler
+diagnostics, `{ code, severity, message, location? }`: L001-L004 (lexer),
+P001-P010 (parser; P008-P010 are warnings), S001-S008 (semantic; S002 and S008
+are warnings). A syntax error the parser throws has code `SYNTAX`. Diagnostics
+with severity `warning` do not stop a program. (Codes: Noisemaker
+shaders/src/lang/diagnostics.js:5-28.)
+
+## Error codes
+
+| Code | When |
+|---|---|
+| `INVALID_ARGS_TYPE` | wrong argument type |
+| `INVALID_ARGS_REQUIRED` | missing required argument |
+| `INVALID_ARGS_RANGE` | number or string length out of range, or a path or name Foundry cannot use |
+| `INVALID_ARGS_ENUM` | value not in the allowed list |
+| `INVALID_ARGS_UNKNOWN` | an argument that the command does not declare |
+| `INVALID_PROGRAM` | the program does not compile. `details.diagnostics` lists the errors. Nothing changed |
+| `INVALID_EFFECT` | `effect` is not a usable Portable effect (`details.field` names the field). Nothing changed |
+| `COMPILE_FAILED` | the renderer rejected a program that passed the compiler. The previous program and effect run again |
+| `NOT_FOUND_EFFECT` | unknown library effect, or no saved effect has that id |
+| `NOT_FOUND_FILE` | the workspace (or, through a session, the session) has no such file |
+| `NOT_FOUND_COMMAND` | the session asked for a command that Foundry does not have |
+| `EFFECT_LOAD_FAILED` | an effect could not load from the shader CDN |
+| `BACKEND_UNAVAILABLE` | the browser cannot render with that backend |
+| `IMPORT_FAILED` | the sharing link or code did not load |
+| `REMOTE_UNAVAILABLE` | the command needs the person at the browser, and came through a session |
+| `IMAGE_LIMIT` | the tab already took 16 images in ten minutes. `details.retryAfter` is in seconds |
+| `IMAGE_AS_TEXT` | a session request or answer would carry an image as base64 text. Add the image with `image-put` and use `image:<sha256>` |
+| `IMAGE_UPLOAD_FAILED` | the tab could not add an image to the session (the session holds up to 32 images) |
+| `INTERNAL_ERROR` | unexpected failure |
+
+---
+
+## Pointers
+
+- Full command reference: https://foundry.noisedeck.app/llms-full.txt
+- DSL and effect contract: https://noisemaker.app/llms-full.txt
+- Agent tool: https://noisedeck.app/agent/seance-agent.mjs (`node seance-agent.mjs help`)
+- Source of truth in the page: `/js/agent/index.js` (registration), `/js/agent/commands.js`
+  (handlers), `/js/agent/schemas.js` (argument schemas), `/js/agent/descriptions.js`
+  (command descriptions), `/js/agent/relay.js` (the session relay)

@@ -24,11 +24,12 @@ const HOST = process.env.HOST || '127.0.0.1';
 function cspMiddleware(req, res, next) {
     const csp = [
         "default-src 'self'",
-        "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdnjs.cloudflare.com https://shaders.noisedeck.app https://handfish.noisefactor.io https://sharing.noisedeck.app",
+        "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdnjs.cloudflare.com https://shaders.noisedeck.app https://handfish.noisefactor.io https://sharing.noisedeck.app https://seance.noisefactor.io",
         "style-src 'self' 'unsafe-inline' https://handfish.noisefactor.io",
         "img-src 'self' data: blob:",
         "font-src 'self' data: https://fonts.noisefactor.io",
-        "connect-src 'self' http://localhost:* https://fonts.noisefactor.io https://shaders.noisedeck.app https://sharing.noisedeck.app",
+        // Seance: the online session's SDK, socket and images (a local Seance server in development).
+        "connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* https://fonts.noisefactor.io https://shaders.noisedeck.app https://sharing.noisedeck.app https://seance.noisefactor.io wss://seance.noisefactor.io",
         "worker-src 'self' blob:"
     ];
 

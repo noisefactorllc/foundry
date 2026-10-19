@@ -7,14 +7,17 @@
 
 import { ShadeRenderer } from './noisemaker/index.js'
 import { preloadFontsForDsl } from './fontLoader.js'
-import { workspaceStore, saveWorkspace, loadWorkspace, registerEffectFromWorkspace, writePortableEffectToWorkspace } from './workspace/index.js'
+import { workspaceStore, saveWorkspace, loadWorkspace, registerEffectFromWorkspace, writePortableEffectToWorkspace, readPortableEffectFromWorkspace, replaceWorkspaceEffect } from './workspace/index.js'
 import { imageFilePath } from './imageRecords.js'
 import { FileBrowser, ParamControls, SavedEffects, keyboard, toast, helpModal, aboutModal, nameDialog, CodeEditor, deleteEffectDialog, initDocReader, toggleDocReader, showDocReader, hideDocReader, isDocReaderVisible, showPlaceholderContent, importFromUrlDialog } from './ui/index.js'
+import { FOUNDRY_VERSION } from './ui/about-modal.js'
 import { OpenEffectDialog } from './ui/open-effect-dialog.js'
 import { ImportEffectDialog } from './ui/import-effect-dialog.js'
 import { WorkspaceFilesDialog } from './ui/workspace-files-dialog.js'
 import { shareModal } from './ui/share-modal.js'
 import { loadFromCode, getCodeFromUrl, attachShareFiles } from './sharingLoader.js'
+import { bootstrapAgent, markAgentReady, createSeanceAgentRelay } from './agent/index.js'
+import { createOnlineCollaboration } from './onlineCollaboration.js'
 import {
     errorHandler,
     handleError,
@@ -846,6 +849,7 @@ async function recompileFromEditor() {
 
         await preloadFontsForDsl(dsl)
         const result = await renderer.compile(dsl, { workspaceStore })
+        lastCompileResult = result
         
         if (currentFile === 'definition.json' && result.success) {
             try {
@@ -864,6 +868,7 @@ async function recompileFromEditor() {
         if (result.success) {
             maybeCheckpoint('Edit')
         }
+        onlineCollaboration.publish({ uploadImages: sessionOrigin === 0 })
 
         return result
     } catch (err) {
@@ -1258,7 +1263,7 @@ async function init() {
         // undo/redo button states in sync with the history.
         workspaceStore.onChange((detail) => {
             if (detail.type === 'restore') {
-                applyRestoredState(detail)
+                lastRestore = applyRestoredState(detail)
             }
             updateUndoRedoButtons()
         })
@@ -1638,6 +1643,7 @@ if (menuBarEl) {
                                 })
                             },
                         },
+                        { id: 'goOnlineMenuItem', label: 'go online...', onSelect: () => seanceDialog?.show?.() },
                     ],
                 },
             ],
@@ -1691,6 +1697,7 @@ async function compileAndRun(compileOpts) {
     // workspace copy — used as a load fallback for multi-pass effects whose
     // workspace shaders are incomplete.
     const result = await renderer.compile(dsl, compileOpts || { workspaceStore })
+    lastCompileResult = result
 
     if (result.success) {
         showCompileStatus('Shader compiled', 'success')
@@ -1703,6 +1710,7 @@ async function compileAndRun(compileOpts) {
         showCompileStatus(`${result.error}`, 'error')
         setAgentStatus('Error')
     }
+    onlineCollaboration.publish({ uploadImages: sessionOrigin === 0 })
     return result
 }
 
@@ -1775,6 +1783,8 @@ async function autoSwitchBackend(backend) {
 // and fire-and-forget — two in the same tick (e.g. undo+redo) must both keep the
 // guard raised until the LAST one finishes.
 let restoringHistory = 0
+// The undo/redo restore in flight, so an agent's undo can wait for it.
+let lastRestore = Promise.resolve()
 
 /** Current effective program (params baked in via toDsl), falling back to the editor. */
 function currentProgramDsl() {
@@ -2150,13 +2160,14 @@ async function handleLoadFromUrl(composition) {
             showCompilerError(result.error)
             setAgentStatus('Error')
             toast.error(`Imported "${composition.title || 'composition'}" but it failed to compile`)
-            return
+            return result
         }
         hideCompilerError()
         setAgentStatus('Ready')
     }
 
     toast.success(`Loaded: ${composition.title || 'Imported composition'}`)
+    return { success: true }
 }
 
 // =========================================================================
@@ -2167,14 +2178,139 @@ async function handleLoadFromUrl(composition) {
 durationInput?.addEventListener('change', updateDuration)
 
 // =========================================================================
+// Online Session and Agent API
+// =========================================================================
+
+// The result of the latest compile, for the agent's state snapshot.
+let lastCompileResult = null
+// Above zero while a change that came from the online session compiles: the
+// session then gets the program but none of the person's own images.
+let sessionOrigin = 0
+
+/** Run `action` as a change that came from the online session. */
+async function fromSession(action) {
+    sessionOrigin++
+    try {
+        return await action()
+    } finally {
+        sessionOrigin--
+    }
+}
+
+const seanceDialog = document.getElementById('seanceDialog')
+
+/** Put program text in the editors and the workspace without compiling it. */
+function setProgramText(dsl) {
+    dslEditor.value = dsl
+    if (canvasEditor && canvasEditorCurrentFile === 'dsl.txt') {
+        canvasEditor.value = dsl
+    }
+    if (workspaceStore.getFile('dsl.txt') !== dsl) workspaceStore.setFile('dsl.txt', dsl)
+}
+
+/** The image records the program can name: the renderer's and the workspace's. */
+function heldImages() {
+    return [...new Map([...renderer.images, ...workspaceStore.images].map(image => [image.id, image])).values()]
+}
+
+/** Keep image records that arrived from the session beside the program's own. */
+function addImages(records) {
+    renderer.images = [...renderer.images, ...records]
+    workspaceStore.images = [...workspaceStore.images, ...records]
+}
+
+/** Show the workspace as it now is: its files, its parameters and its name. */
+function refreshWorkspaceView() {
+    fileBrowser.render()
+    const defJson = workspaceStore.getFile('definition.json')
+    if (defJson) {
+        try {
+            paramControls.setEffect({ globals: JSON.parse(defJson).globals || {} })
+        } catch (e) { /* the editor reports an invalid definition */ }
+    }
+    if (canvasEditor && canvasEditorCurrentFile !== 'dsl.txt') {
+        const content = workspaceStore.getFile(canvasEditorCurrentFile)
+        if (content !== undefined) canvasEditor.value = content
+    }
+    updateMenuFilename()
+}
+
+/** The workspace's custom effect as Portable effect JSON, or '' when it has none. */
+function workspaceEffectText() {
+    const { effect } = readPortableEffectFromWorkspace()
+    return effect ? JSON.stringify(effect) : ''
+}
+
+/** Put a custom effect that arrived from the session in the workspace. */
+function setWorkspaceEffectText(text) {
+    if (text === workspaceEffectText()) return
+    let effect
+    try {
+        effect = JSON.parse(text)
+    } catch (err) {
+        console.warn('[Seance] the session holds a custom effect that is not JSON', err)
+        return
+    }
+    replaceWorkspaceEffect(effect, renderer)
+    refreshWorkspaceView()
+}
+
+const onlineCollaboration = createOnlineCollaboration({
+    dialog: seanceDialog,
+    notify: (message, type = 'info') => toast.show(message, type),
+    getDsl: () => dslEditor.value,
+    setDsl: setProgramText,
+    getEffectText: workspaceEffectText,
+    setEffectText: setWorkspaceEffectText,
+    compile: ({ remote } = {}) => remote ? fromSession(compileAndRun) : compileAndRun(),
+    heldImages,
+    addImages,
+    createAgentRelay: ({ uploadImage }) => createSeanceAgentRelay({ appVersion: FOUNDRY_VERSION, uploadImage }),
+})
+
+// Undo and redo restore through the workspace's 'restore' event; wait for it.
+async function restoreHistory(step) {
+    if (!(step === 'undo' ? workspaceStore.canUndo() : workspaceStore.canRedo())) return false
+    workspaceStore[step]()
+    await lastRestore
+    return true
+}
+
+bootstrapAgent({
+    renderer,
+    workspaceStore,
+    savedEffects,
+    getDsl: () => dslEditor.value,
+    setDsl: setProgramText,
+    compile: ({ remote } = {}) => remote ? fromSession(compileAndRun) : compileAndRun(),
+    lastCompile: () => lastCompileResult,
+    sessionText: docId => onlineCollaboration.sessionText(docId),
+    refreshWorkspace: refreshWorkspaceView,
+    resolveImages: dsl => onlineCollaboration.resolveImages(dsl),
+    isPaused: () => isPaused,
+    togglePlayPause,
+    switchBackend: backend => autoSwitchBackend(backend),
+    loadEffect: (effectId, name, { remote } = {}) => remote
+        ? fromSession(() => loadEffectToWorkspace(effectId, name))
+        : loadEffectToWorkspace(effectId, name),
+    refreshEffectDialog,
+    exportZip: () => handleExport(),
+    importComposition: composition => handleLoadFromUrl(composition),
+    undo: ({ remote } = {}) => remote ? fromSession(() => restoreHistory('undo')) : restoreHistory('undo'),
+    redo: ({ remote } = {}) => remote ? fromSession(() => restoreHistory('redo')) : restoreHistory('redo'),
+})
+
+// =========================================================================
 // Start
 // =========================================================================
 
-init().then(() => {
+init().then(async () => {
     // Focus editor after load
     if (canvasEditor) {
         canvasEditor.focus()
     }
+    markAgentReady()
+    await onlineCollaboration.joinFromUrlIfPresent()
 })
 
 // Expose for debugging

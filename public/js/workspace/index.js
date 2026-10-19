@@ -177,6 +177,57 @@ export function registerEffectFromWorkspace(renderer = null, dslOverride = null)
     }
 }
 
+// The files that make up the workspace's custom effect.
+const EFFECT_FILE = /^(definition\.json|help\.md|glsl\/[^/]+\.glsl|wgsl\/[^/]+\.wgsl)$/
+// The definition fields a Portable effect carries (see writePortableEffectToWorkspace).
+const PORTABLE_FIELDS = ['name', 'func', 'namespace', 'author', 'description', 'tags', 'globals', 'passes', 'textures',
+    'outputTex3d', 'outputGeo', 'uniformLayout', 'uniformLayouts', 'defaultProgram', 'paramAliases', 'starter']
+
+/**
+ * The workspace's custom effect as a Portable effect: its definition fields,
+ * its shaders by program, and its help text. `effect` is null when the
+ * workspace has no definition.json, and `error` says why when it is not JSON.
+ * @returns {{effect: object|null, error?: string}}
+ */
+export function readPortableEffectFromWorkspace() {
+    const source = workspaceStore.getFile('definition.json')
+    if (!source) return { effect: null }
+    let definition
+    try {
+        definition = JSON.parse(source)
+    } catch (err) {
+        return { effect: null, error: `definition.json is not valid JSON: ${err.message}` }
+    }
+    const effect = {}
+    for (const field of PORTABLE_FIELDS) if (definition[field] !== undefined) effect[field] = definition[field]
+    effect.shaders = {}
+    for (const [path, content] of workspaceStore.files) {
+        const match = /^(glsl|wgsl)\/([^/]+)\.(glsl|wgsl)$/.exec(path)
+        if (!match || match[1] !== match[3]) continue
+        effect.shaders[match[2]] ||= {}
+        effect.shaders[match[2]][match[1]] = content
+    }
+    const help = workspaceStore.getFile('help.md')
+    if (help) effect.help = help
+    return { effect }
+}
+
+/**
+ * Put a Portable effect in the workspace in place of its custom effect, as
+ * "import from url" does, keeping files that are not part of the effect, and
+ * register it under `user`.
+ * @param {object} effect - A Portable effect, with `func` or `name`
+ * @param {object} [renderer] - ShadeRenderer to register the effect with
+ */
+export function replaceWorkspaceEffect(effect, renderer = null) {
+    for (const path of [...workspaceStore.files.keys()]) {
+        if (EFFECT_FILE.test(path)) workspaceStore.deleteFile(path)
+    }
+    writePortableEffectToWorkspace({ ...effect, func: effect.func || effect.name, name: effect.name || effect.func })
+    workspaceStore.name = effect.name || effect.func
+    registerEffectFromWorkspace(renderer)
+}
+
 /** Write a Portable effect's definition and sources to the current workspace. */
 export function writePortableEffectToWorkspace(effectData) {
     const definition = {
