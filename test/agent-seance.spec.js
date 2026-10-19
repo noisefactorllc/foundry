@@ -284,16 +284,14 @@ test(`${BROWSER}: connect agent walks the person through going online, copying t
     await dialog.locator('[data-action="copy-prompt"]').click()
     await poll(states, value => value.join() === 'done,done,active', { label: 'the Copy Prompt step done' })
     const [prompt] = await page.evaluate(() => window.__copied)
-    assert.equal(prompt, [
-        'Connect to my Foundry session and help me with it.',
-        'Read https://foundry.noisedeck.app/llms-full.txt first.',
-        'Then run:',
-        '  curl -fsSLO https://noisedeck.app/agent/seance-agent.mjs',
-        `  node seance-agent.mjs join ${origin}/?seance=${code}`,
-    ].join('\n'))
+    // The shared wording comes from handfish; the app gives it its contract and the session link.
+    const expected = await page.evaluate(([contractUrl, sessionUrl]) => import('handfish').then(handfish =>
+        handfish.agentConnectPrompt({ app: 'Foundry', contractUrl, sessionUrl })), ['https://foundry.noisedeck.app/llms-full.txt', `${origin}/?seance=${code}`])
+    assert.equal(prompt, expected)
+    assert.ok(prompt.includes('https://foundry.noisedeck.app/llms-full.txt') && prompt.includes(`${origin}/?seance=${code}`))
 
     // The agent follows the prompt's last line; its first request confirms it.
-    const joinUrl = prompt.trim().split('\n').at(-1).trim().split(' ').at(-1)
+    const joinUrl = prompt.trim().split('\n').at(-1).trim().split(' ').at(-1).replace(/^'|'$/g, '')
     await agent.join(new URL(joinUrl).searchParams.get('seance'))
     assert.equal((await agent.request('describe')).app, 'foundry')
     await poll(states, value => value.join() === 'done,done,done', { label: 'the Confirm step done' })

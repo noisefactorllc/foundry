@@ -43,7 +43,7 @@ person already has open: their program, their custom effect, their canvas.
 | `node seance-agent.mjs set <file>` | Runs a program in the person's tab (setProgram). |
 | `node seance-agent.mjs look [--size N] [--format png\|jpg] [--out FILE]` | Saves an image of the person's canvas. Prints its path. Open the file with your image tool. |
 | `node seance-agent.mjs call <command> [JSON]` | Runs any command, for example `call writeFile '{"path":"glsl/glow.glsl","content":"..."}'`. |
-| `node seance-agent.mjs wait [--since REV] [--timeout S]` | Waits for the person to change the program, then prints it. |
+| `node seance-agent.mjs wait --doc main [--since REV] [--timeout S]` | Waits for the person to change the program, then prints it. (Without `--doc main` it also wakes for a change to the custom effect, and prints that document.) |
 | `node seance-agent.mjs image-put <file>` | Adds a PNG, JPEG, GIF or WebP file to the session. Prints `image:<id>`. |
 | `node seance-agent.mjs transfer <from> <to>` | Copies the program and its images from one joined session to another. |
 | `node seance-agent.mjs leave` / `stop` | Leaves the session / stops the background process. |
