@@ -1,0 +1,171 @@
+#!/usr/bin/env python3
+"""
+Vendor the knowledge module of the pinned shade-mcp release.
+
+shade-mcp-release.json pins the release Foundry ships and the sha256 of its
+knowledge/ tree. With no arguments this installs that release and fails when
+its knowledge differs from the pinned digest, so a deploy builds exactly the
+knowledge that was tested when the pin was committed.
+
+    ./pull-shade-mcp                   install the pinned release (deploys)
+    ./pull-shade-mcp --release vX.Y.Z  install vX.Y.Z and move the pin to it
+                                       if its knowledge differs
+
+There is no "latest" lookup: a deploy never picks up a release that was not
+tested here. Uses curl only (no gh CLI on the deploy runner).
+
+GITHUB_TOKEN, when set, authenticates the download. The token is handed to
+curl on stdin via --config so it never appears in argv.
+"""
+import argparse
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import tempfile
+import sys
+import tarfile
+
+REPO = "noisefactorllc/shade-mcp"
+VENDOR_DIR = "public/vendor/shade-mcp"
+ASSET_NAME = "shade-mcp-dist.tar.gz"
+PIN_FILE = "shade-mcp-release.json"
+
+
+def auth_config():
+    """curl --config payload carrying the token, or (args, stdin) with no auth.
+
+    Passing the header via stdin keeps the token out of the process argument
+    list, where anything on the host could read it.
+    """
+    token = os.environ.get("GITHUB_TOKEN")
+    if not token:
+        return [], None
+    return ["--config", "-"], f'header = "Authorization: Bearer {token}"\n'
+
+
+def run_curl(args, **kwargs):
+    """Run curl with auth applied, if a token is available."""
+    auth_args, auth_stdin = auth_config()
+    return subprocess.run(
+        ["curl", *args, *auth_args],
+        input=auth_stdin,
+        text=True,
+        **kwargs,
+    )
+
+
+def download_knowledge(tag, dest_dir):
+    """Download the release tarball for tag; return its knowledge/ directory."""
+    tarball = os.path.join(dest_dir, ASSET_NAME)
+
+    url = f"https://github.com/{REPO}/releases/download/{tag}/{ASSET_NAME}"
+    run_curl(["-fSL", "-o", tarball, url], check=True)
+
+    # Install only regular knowledge files. Release archives must not introduce links or escape their root.
+    with tarfile.open(tarball, "r:gz") as archive:
+        for member in archive.getmembers():
+            parts = [part for part in member.name.split("/") if part not in ("", ".")]
+            if member.name.startswith("/") or ".." in parts or not (member.isfile() or member.isdir()):
+                raise ValueError("Release archive contains a path or file type that cannot be installed")
+            if not parts or parts[0] != "knowledge":
+                continue
+            target = os.path.join(dest_dir, *parts)
+            if member.isdir():
+                os.makedirs(target, exist_ok=True)
+            else:
+                os.makedirs(os.path.dirname(target), exist_ok=True)
+                with archive.extractfile(member) as source, open(target, "wb") as output:
+                    shutil.copyfileobj(source, output)
+    os.remove(tarball)
+
+    knowledge = os.path.join(dest_dir, "knowledge")
+    if not os.path.isfile(os.path.join(knowledge, "shader-craft.js")):
+        return None
+    return knowledge
+
+
+def tree_digest(root):
+    """sha256 over each file's relative path and contents, in a fixed order."""
+    digest = hashlib.sha256()
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames.sort()
+        for name in sorted(filenames):
+            path = os.path.join(dirpath, name)
+            rel = os.path.relpath(path, root).replace(os.sep, "/")
+            with open(path, "rb") as f:
+                content = hashlib.sha256(f.read()).hexdigest()
+            digest.update(f"{rel}\0{content}\n".encode())
+    return digest.hexdigest()
+
+
+def read_pin():
+    with open(PIN_FILE) as f:
+        pin = json.load(f)
+    return pin["tag"], pin["knowledge_sha256"]
+
+
+def write_pin(tag, digest):
+    with open(PIN_FILE, "w") as f:
+        json.dump({"tag": tag, "knowledge_sha256": digest}, f, indent=2)
+        f.write("\n")
+
+
+def install(knowledge):
+    if os.path.exists(VENDOR_DIR):
+        shutil.rmtree(VENDOR_DIR)
+    os.makedirs(VENDOR_DIR)
+    shutil.copytree(knowledge, os.path.join(VENDOR_DIR, "knowledge"))
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Vendor the knowledge module of the pinned shade-mcp release.")
+    parser.add_argument(
+        "--release", metavar="TAG",
+        help="install this release and move the pin to it if its knowledge differs")
+    args = parser.parse_args()
+
+    if os.path.isfile(PIN_FILE):
+        pinned_tag, pinned_digest = read_pin()
+    elif args.release:
+        pinned_tag, pinned_digest = None, None
+    else:
+        print(f"ERROR: {PIN_FILE} is missing; select an approved release with --release")
+        return 1
+    tag = args.release or pinned_tag
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        print(f"Downloading shade-mcp {tag}...")
+        try:
+            knowledge = download_knowledge(tag, tmpdir)
+        except (subprocess.CalledProcessError, ValueError, tarfile.TarError) as e:
+            print(f"ERROR: could not fetch shade-mcp {tag}: {e}")
+            return 1
+        if knowledge is None:
+            print(f"ERROR: shade-mcp {tag} has no knowledge/shader-craft.js browser entry")
+            return 1
+        digest = tree_digest(knowledge)
+
+        if args.release is None:
+            if digest != pinned_digest:
+                print(f"ERROR: shade-mcp {tag} knowledge has sha256 {digest}, "
+                      f"but {PIN_FILE} pins {pinned_digest}")
+                return 1
+        elif digest == pinned_digest:
+            print(f"shade-mcp {tag} knowledge is identical to the pinned "
+                  f"{pinned_tag}; the pin stays.")
+        else:
+            write_pin(tag, digest)
+            print(f"Moved the pin from {pinned_tag} to {tag} "
+                  f"(knowledge sha256 {digest}).")
+
+        install(knowledge)
+        print(f"Installed shade-mcp {tag} knowledge into {VENDOR_DIR}/knowledge")
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

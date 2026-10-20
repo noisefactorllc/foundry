@@ -21,6 +21,11 @@ const NAME = { type: 'string', minLength: 1 }
 const PATH = { type: 'string', minLength: 1 }
 const NONE = strict({})
 
+const SHADER = {
+    ...strict({ source: { type: 'string' }, path: PATH, language: { type: 'string', enum: ['glsl', 'wgsl'] } }),
+    oneOf: [{ required: ['source'] }, { required: ['path'] }],
+}
+
 export const SCHEMAS = {
     getState: NONE,
     getProgram: NONE,
@@ -45,6 +50,13 @@ export const SCHEMAS = {
     getEffectDefinition: strict({ effectId: NAME }, ['effectId']),
     play: NONE,
     pause: NONE,
+    renderAt: strict({ time: { type: 'number', min: 0, max: 1 },
+        maxDimension: { type: 'integer', min: 16, max: 1024, default: 256 },
+        format: { type: 'string', enum: ['png', 'jpg'], default: 'jpg' },
+    }, ['time']),
+    setLoopDuration: strict({ seconds: { type: 'number', exclusiveMinimum: 0 } }, ['seconds']),
+    checkShader: SHADER,
+    bundleShader: { ...SHADER, properties: { ...SHADER.properties, write: { type: 'boolean', default: false } } },
     setBackend: strict({ backend: { type: 'string', enum: ['webgl2', 'webgpu'] } }, ['backend']),
     getThumbnail: strict({
         maxDimension: { type: 'integer', min: 16, max: 1024, default: 256 },
@@ -96,6 +108,9 @@ export function validate(value, schema, path = '') {
                 const r = validate(value[key], sub, f)
                 if (!r.ok) return r
             }
+            if (schema.oneOf && schema.oneOf.filter(choice => (choice.required || []).every(key => key in value)).length !== 1) {
+                return fail('INVALID_ARGS_REQUIRED', 'Provide exactly one of source or path.', { field })
+            }
             return { ok: true }
         }
         case 'string':
@@ -118,6 +133,10 @@ export function validate(value, schema, path = '') {
                 || (schema.type === 'integer' && !Number.isInteger(value))) {
                 return fail('INVALID_ARGS_TYPE', `${field}: expected ${schema.type}, got ${typeName(value)}`,
                     { field, expected: schema.type, got: typeName(value) })
+            }
+            if (typeof schema.exclusiveMinimum === 'number' && value <= schema.exclusiveMinimum) {
+                return fail('INVALID_ARGS_RANGE', `${field}: must be greater than ${schema.exclusiveMinimum}`,
+                    { field, exclusiveMinimum: schema.exclusiveMinimum, got: value })
             }
             if ((typeof schema.min === 'number' && value < schema.min)
                 || (typeof schema.max === 'number' && value > schema.max)) {

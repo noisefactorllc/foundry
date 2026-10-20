@@ -2308,7 +2308,33 @@ bootstrapAgent({
     resolveImages: dsl => onlineCollaboration.resolveImages(dsl),
     isPaused: () => isPaused,
     togglePlayPause,
-    switchBackend: backend => autoSwitchBackend(backend),
+    hasUnpublishedEditorDraft: () => Boolean(canvasEditor && canvasEditor.value !== (
+        canvasEditorCurrentFile === 'dsl.txt' ? dslEditor.value : workspaceStore.getFile(canvasEditorCurrentFile) ?? ''
+    )),
+    getPausedTime: () => renderer.normalizedTime,
+    renderAt: async time => {
+        if (!isPaused) togglePlayPause()
+        pausedTime = time
+        await renderer.renderAt(time)
+    },
+    setLoopDuration: seconds => {
+        renderer.setLoopDuration(seconds)
+        if (durationInput) durationInput.value = seconds
+    },
+    switchBackend: async (backend, { dsl } = {}) => {
+        if (renderer.backend === backend) return { success: true }
+        const frameTime = renderer.normalizedTime ?? pausedTime
+        const result = await renderer.switchBackend(backend, { workspaceStore, ...(dsl !== undefined ? { dsl } : {}) })
+        if (isPaused) {
+            renderer.stop()
+            if (result.success) {
+                pausedTime = frameTime
+                await renderer.renderAt(pausedTime)
+            }
+        } else if (!renderer.isRunning) renderer.start()
+        window.dispatchEvent(new CustomEvent('backend-changed', { detail: { backend: renderer.backend } }))
+        return result
+    },
     // Not through a session: it replaces the person's whole workspace.
     loadEffect: (effectId, name) => loadEffectToWorkspace(effectId, name),
     refreshEffectDialog,

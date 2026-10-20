@@ -2,7 +2,7 @@ import { SCHEMAS } from './schemas.js'
 import { COMMAND_GROUPS } from './descriptions.js'
 
 export const DESCRIPTIONS = Object.assign({}, ...COMMAND_GROUPS.map(group => group.commands))
-const READ_ONLY = new Set(['getState', 'getProgram', 'validateProgram', 'listFiles', 'readFile', 'listSavedEffects', 'searchEffects', 'getEffectDefinition', 'getThumbnail'])
+const READ_ONLY = new Set(['getState', 'getProgram', 'validateProgram', 'listFiles', 'readFile', 'listSavedEffects', 'searchEffects', 'getEffectDefinition', 'getThumbnail', 'checkShader'])
 /** Commands that an agent in the person's Seance session can run in this tab. */
 export const REMOTE = new Set(Object.keys(SCHEMAS).filter(name => DESCRIPTIONS[name].remote !== false))
 
@@ -28,7 +28,7 @@ export function jsonSchema(schema) {
 }
 
 export function imageResult(envelope) {
-    if (envelope.command !== 'getThumbnail' || !envelope.ok) return { envelope }
+    if (!['getThumbnail', 'renderAt'].includes(envelope.command) || !envelope.ok) return { envelope }
     const { bytes, ...metadata } = envelope.result
     return { envelope: { ...envelope, result: metadata }, image: { type: 'image', data: bytes, mimeType: metadata.mimeType } }
 }
@@ -37,7 +37,7 @@ export function registerWebMCP(agent) {
     const context = document.modelContext || navigator.modelContext
     if (typeof context?.registerTool !== 'function') return
     for (const [name, schema] of Object.entries(SCHEMAS)) {
-        const returns = name === 'getThumbnail'
+        const returns = ['getThumbnail', 'renderAt'].includes(name)
             ? 'an image content block and a text envelope containing mimeType, width and height'
             : DESCRIPTIONS[name].returns
         const tool = {

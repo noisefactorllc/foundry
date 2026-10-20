@@ -429,6 +429,69 @@ export async function getEffectDefinition({ effectId }, ctx) {
     }
 }
 
+// A session may operate on the shared work, never an unpublished editor draft or shader override.
+function requireSharedWork(ctx) {
+    if (!ctx.remote) return
+    const { dsl, effect } = visibleWork(ctx)
+    const local = readPortableEffectFromWorkspace()
+    if (ctx.hasUnpublishedEditorDraft?.() || ctx.getDsl() !== dsl || ctx.renderer.currentDsl !== dsl.trim() || local.error || JSON.stringify(local.effect) !== JSON.stringify(effect)) {
+        throw commandError('REMOTE_UNAVAILABLE', 'The tab has unpublished work. Apply the shared program before changing its rendering or writing a bundled shader.')
+    }
+}
+
+function shaderInput({ source, path, language }, ctx) {
+    if ((source === undefined) === (path === undefined)) {
+        throw commandError('INVALID_ARGS_REQUIRED', 'Provide exactly one of source or path.')
+    }
+    if (path !== undefined) {
+        if (!/^(?!\/)(?:[^/]+\/)*[^/]+\.(glsl|wgsl)$/.test(path) || path.split('/').some(p => p === '.' || p === '..') || path.includes('\\')) {
+            throw commandError('INVALID_ARGS_RANGE', 'path must name an existing relative .glsl or .wgsl file.', { field: 'path' })
+        }
+        const files = visibleFiles(ctx)
+        if (!files.has(path)) throw commandError('NOT_FOUND_FILE', 'The visible work has no shader at that path.', { path })
+        source = files.get(path)
+        language ??= path.endsWith('.wgsl') ? 'wgsl' : 'glsl'
+    }
+    if (!language) throw commandError('INVALID_ARGS_REQUIRED', 'Source text requires language: glsl or wgsl.', { field: 'language' })
+    return { source, language }
+}
+
+// This same-origin file is installed from the pinned shade-mcp release at build time.
+const shaderCraft = () => import('../../vendor/shade-mcp/knowledge/shader-craft.js')
+
+export async function checkShader(args, ctx) {
+    const { source, language } = shaderInput(args, ctx)
+    const { checkShaderSource } = await shaderCraft()
+    return { result: { language, advisory: true, findings: checkShaderSource(source, language) } }
+}
+
+export async function bundleShader({ source, path, language, write = false }, ctx) {
+    const input = shaderInput({ source, path, language }, ctx)
+    if (write && path === undefined) throw commandError('INVALID_ARGS_REQUIRED', 'write: true requires a shader path.', { field: 'path' })
+    if (write) requireSharedWork(ctx)
+    const { bundleShaderSource } = await shaderCraft()
+    let bundled
+    try { bundled = bundleShaderSource(input.source, input.language) }
+    catch (err) { throw commandError('INVALID_PROGRAM', err?.message || String(err)) }
+    let compiled
+    if (write) ({ result: { compiled } } = await writeFile({ path, content: bundled.source }, ctx))
+    return { result: { ...bundled, language: input.language, written: write, ...(compiled ? { compiled } : {}) } }
+}
+
+export async function renderAt({ time, maxDimension = 256, format = 'jpg' }, ctx) {
+    requireSharedWork(ctx)
+    try { await ctx.renderAt(time) }
+    catch (err) { throw commandError('RENDER_FAILED', err?.message || String(err)) }
+    const frame = await getThumbnail({ maxDimension, format }, ctx)
+    return { ...frame, result: { time, playing: false, ...frame.result } }
+}
+
+export async function setLoopDuration({ seconds }, ctx) {
+    requireSharedWork(ctx)
+    ctx.setLoopDuration(seconds)
+    return { result: { seconds } }
+}
+
 export async function play(_args, ctx) {
     if (ctx.isPaused()) ctx.togglePlayPause()
     return { result: { playing: !ctx.isPaused() } }
@@ -440,11 +503,12 @@ export async function pause(_args, ctx) {
 }
 
 export async function setBackend({ backend }, ctx) {
+    requireSharedWork(ctx)
     if (backend === 'webgpu' && !navigator.gpu) {
         throw commandError('BACKEND_UNAVAILABLE', 'This browser has no WebGPU. Foundry stays on WebGL2.', { backend })
     }
-    await ctx.switchBackend(backend)
-    if (ctx.renderer.backend !== backend) {
+    const outcome = await ctx.switchBackend(backend, { dsl: ctx.remote ? visibleWork(ctx).dsl : undefined })
+    if (outcome?.success === false || ctx.renderer.backend !== backend) {
         throw commandError('BACKEND_UNAVAILABLE', `Foundry could not switch to ${backend}.`, { backend, current: ctx.renderer.backend })
     }
     return { result: { backend: ctx.renderer.backend } }
@@ -458,7 +522,7 @@ export async function getThumbnail({ maxDimension = 256, format = 'jpg' }, ctx) 
     // stateful effects do not advance: a running loop has drawn the latest
     // frame, and a paused canvas keeps its last one (WebGL2 preserves it).
     if (!ctx.isPaused()) await nextFrame()
-    const live = ctx.renderer.canvas
+    const live = (ctx.isPaused() && ctx.renderer.capturedFrame) || ctx.renderer.canvas
     const scale = Math.min(1, maxDimension / Math.max(live.width, live.height, 1))
     const out = document.createElement('canvas')
     out.width = Math.max(1, Math.round(live.width * scale))

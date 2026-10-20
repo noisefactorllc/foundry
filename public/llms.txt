@@ -68,8 +68,7 @@ How it works, so you can explain it to the person:
 - Everyone in the session receives every answer, and anyone who can edit the
   session can send commands to that tab. So the person's saved effects
   (`listSavedEffects`, `loadSavedEffect`, `saveEffect`, `deleteSavedEffect`),
-  the ZIP download (`exportZip`), the rendering backend (`setBackend`),
-  sharing links (`importComposition`), and `newEffect` and `loadEffect`, which
+  the ZIP download (`exportZip`), sharing links (`importComposition`), and `newEffect` and `loadEffect`, which
   would replace the person's whole workspace with its images and undo history,
   are not reachable through a session: they answer `REMOTE_UNAVAILABLE`, and
   `commands` marks them.
@@ -159,7 +158,7 @@ workspace files and registers it as `user.<func>`.
   `setProgram({ dsl, effect })`. A refused program puts the previous effect
   back.
 - `setBackend` renders the WGSL shaders with WebGPU, or the GLSL shaders with
-  WebGL2. Write and check both: the other Noise Factor apps and the desktop
+  WebGL2, including through a session. It preserves the playback state and paused frame. Write and check both: the other Noise Factor apps and the desktop
   apps pick a backend by browser.
 
 ```js
@@ -184,6 +183,92 @@ void main() {
 }
 return (await A.setProgram({ dsl: 'search user\nstripes(count: 12).write(o0)\nrender(o0)\n', effect })).ok
 ```
+
+## Shader craft
+
+Follow the shared [portable-effect authoring workflow](https://noisemaker.app/llms-full.txt#portable-effect-authoring) for effect structure, shader development and cross-backend verification; the commands below apply it in Foundry.
+
+Use `checkShader({ source, language })` while writing GLSL or WGSL, or pass
+`{ path: "glsl/<program>.glsl" }` / `{ path: "wgsl/<program>.wgsl" }` to check
+an existing visible shader. Supply exactly one source or path. Source text
+requires `language: "glsl" | "wgsl"`; a path supplies it through its extension.
+Findings are advisory `{ rule, severity, line, message }` entries with 1-based
+lines. Even an error-severity finding does not prevent compilation. The
+Noisemaker compiler still rejects shader/program errors.
+
+`bundleShader` takes the same inputs. It returns the self-contained source,
+newly added symbol IDs and technique credit keys. It adds only referenced
+library symbols and their dependency closure, including all GLSL overloads of
+a used name and exact WGSL names. Caller definitions win. Use the signatures
+in the vendored shader-craft library; overloaded WGSL names have type suffixes,
+for example `fbm_f2i` and `sdBox_f3f3`. Keep the generated shader-skills MIT
+copyright and original technique-source comment with the bundled code.
+
+Bundling changes no workspace file unless `write: true` is explicit and a
+shader path is supplied. A write follows `writeFile`: the file stays written
+and `compiled` reports whether the program compiled. Missing caller-owned
+`map` or `ZERO` scene contracts are reported instead of invented. GLSL raymarch
+programs define `vec2 map(vec3 p)` and define `ZERO` before library code; WGSL
+programs declare private `ZERO` and initialize it from their frame uniform in
+the entry point. (Source: the pinned shade-mcp shader-craft library conventions
+and program-symbol index, `vendor/shade-mcp/knowledge/index.js`.)
+
+Through a session, shader paths refer only to its shared effect. Private
+workspace files are unavailable. A bundle write, `renderAt`, `setLoopDuration`
+or `setBackend` is refused with `REMOTE_UNAVAILABLE` when the editor or effect
+has unpublished work or the shared program is not running. Apply the shared
+program explicitly with `setProgram` before using those commands; a refused
+command does not overwrite the private draft. Plain source checks and
+non-writing bundles remain available.
+
+Build the effect around its visual requirements: identify the subject,
+choose the representation and library primitives, make the silhouette and
+motion legible, then add material detail and lighting. Use PCG-based library
+hashes for procedural randomness. Keep distance-field exactness and bounds
+in mind when choosing a marching step. Compose noise by scale and purpose,
+and keep the lighting/tonemap/output color pipeline explicit. Write a GLSL
+and WGSL implementation for every pass. Check findings, bundle the helpers,
+compile, and compare fresh images on both backends at the same normalized
+times. These are strong suggestions, rather than extra enforcement by
+Foundry. (Source: shade-mcp `SHADER_CRAFT_WORKFLOW`, adapted from shader-skills
+at `e09bc993bf04201f26c03c87c89210e9b472f526`.)
+
+## Recreate a reference video
+
+This workflow is run by the person's own coding agent connected to Foundry.
+Inspect the supplied video before writing shaders. Measure its duration,
+resolution, aspect ratio and cuts; sample the timeline and identify the
+objects, visible parts, proportions, palette, lighting, camera and motion.
+Describe uncertainty and proposed omissions, and obtain approval for the
+breakdown before building. Keep this breakdown in the conversation.
+
+Set `setLoopDuration({ seconds: L })` to the clip's length. To sample second
+`s`, call `renderAt({ time: s / L, maxDimension: 1024, format: "png" })`.
+`time` must be finite and between 0 and 1 inclusive. The command pauses,
+renders one fresh frame with zero elapsed simulation time, waits for GPU
+submission and returns its image. It leaves that frame paused for inspection;
+`play` resumes animation. In the page, image bytes use the same envelope as
+`getThumbnail`; through a session they travel as binary session images.
+Use `setBackend` and repeat the same samples to compare GLSL and WGSL.
+
+Develop in milestones: composition and timeline, geometry and motion,
+materials and lighting, then detail. Critique rendered frames against the
+reference at each milestone. Run at least three critique/correction passes,
+fixing the five largest differences each pass before proceeding. Measure
+palette regions, subject sizes and beat times; timeline beats must match within
+0.25 seconds. At 1280 by 720, objects covering more than ten percent of the
+frame need silhouette, secondary forms and surface detail. Inspect close-ups of major
+objects and frame sequences around transitions, contacts and the loop seam;
+stills alone do not verify motion. Use ten-frame strips at 1/60-second spacing
+around transitions and the loop seam, and one complete gait cycle to verify
+that planted contacts do not slide. Preserve continuity of pose, speed, camera
+and gait phase. Use analytic secondary motion where a fresh arbitrary-time
+frame must be reproducible. Feedback or simulation textures depend on earlier
+frames: `renderAt` does not reset or reconstruct that history, so verify those
+with sequences. Report performance without simplifying the approved visual
+target or motion without approval. (Source: shade-mcp
+`SHADER_CRAFT_VIDEO_TO_EFFECT`, adapted from the same pinned shader-skills
+video workflow.)
 
 ## Noisemaker conventions
 
@@ -334,6 +419,7 @@ shaders/src/lang/diagnostics.js:5-28.)
 | `NOT_FOUND_FILE` | the workspace (or, through a session, the session) has no such file |
 | `NOT_FOUND_COMMAND` | the session asked for a command that Foundry does not have |
 | `EFFECT_LOAD_FAILED` | an effect could not load from the shader CDN |
+| `RENDER_FAILED` | the renderer did not produce the requested explicit frame |
 | `BACKEND_UNAVAILABLE` | the browser cannot render with that backend |
 | `IMPORT_FAILED` | the sharing link or code did not load |
 | `REMOTE_UNAVAILABLE` | the command needs the person at the browser, and came through a session |

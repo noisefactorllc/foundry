@@ -5,7 +5,7 @@
   "main": "main.js",
   "description": "Foundry desktop wrapper (uses @nf/desktop-shell).",
   "scripts": {
-    "predist": "node ../scripts/fetch-noisemaker.cjs",
+    "predist": "cd .. && python3 pull-shade-mcp && node scripts/fetch-noisemaker.cjs",
     "predev": "npm install --no-save ../../scaffold/apps/desktop-shell",
     "dev": "electron .",
     "dist": "electron-builder",

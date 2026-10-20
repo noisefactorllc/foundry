@@ -6,6 +6,8 @@ on:
       - main
     paths:
       - 'public/**'
+      - 'pull-shade-mcp'
+      - 'shade-mcp-release.json'
       - '.github/workflows/deploy.yml'
 
 concurrency:
@@ -19,6 +21,9 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+
+      - name: Fetch pinned shader knowledge
+        run: python3 pull-shade-mcp
 
       - name: Generate deployment metadata
         run: |

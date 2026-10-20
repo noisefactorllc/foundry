@@ -238,6 +238,7 @@ export class ShadeRenderer {
      * Start the render loop
      */
     start() {
+        this._pausedCapture = null
         this._renderer.start()
     }
 
@@ -254,6 +255,7 @@ export class ShadeRenderer {
      * @param {number} height - New height
      */
     resize(width, height) {
+        this._pausedCapture = null
         this.width = width
         this.height = height
         if (this._renderer.resize) {
@@ -268,6 +270,35 @@ export class ShadeRenderer {
      */
     render(normalizedTime) {
         this._renderer.render(normalizedTime)
+    }
+
+    /** Normalized time of the frame the pipeline most recently rendered. */
+    get normalizedTime() {
+        return this._renderer.pipeline?.lastTime ?? null
+    }
+
+    /** The last explicit paused frame, while its renderer state is still current. */
+    get capturedFrame() {
+        const frame = this._pausedCapture
+        return frame && !this.isRunning && frame.pipeline === this._renderer.pipeline &&
+            frame.frameCount === this._renderer.frameCount && frame.live === this.canvas ? frame.canvas : null
+    }
+
+    /** Render one explicit frame with zero elapsed simulation time and wait for GPU submission. */
+    async renderAt(normalizedTime) {
+        const before = this._renderer.frameCount
+        this._renderer.syncTime(normalizedTime)
+        this.render(normalizedTime)
+        if (this._renderer.frameCount !== before + 1) throw new Error('The renderer did not produce the requested frame.')
+        // WebGPU clears its swapchain after presentation. Copy within this render task, before an await can
+        // yield to the compositor, so the image command and later paused thumbnails retain this exact frame.
+        const canvas = document.createElement('canvas')
+        const live = this.canvas
+        canvas.width = live.width
+        canvas.height = live.height
+        canvas.getContext('2d').drawImage(live, 0, 0)
+        this._pausedCapture = { canvas, live, pipeline: this._renderer.pipeline, frameCount: this._renderer.frameCount }
+        await this._renderer.pipeline?.backend?.device?.queue.onSubmittedWorkDone()
     }
 
     // =========================================================================
@@ -294,6 +325,7 @@ export class ShadeRenderer {
      * @returns {Promise<{success: boolean, error?: string}>}
      */
     compile(dsl, options = {}) {
+        this._pausedCapture = null
         // Chain on the previous compile's settlement (success OR failure, via the
         // same handler for both) so one rejected link never breaks the queue.
         // Each caller receives the promise for its own queued run.
@@ -723,9 +755,9 @@ export class ShadeRenderer {
         // of this._currentDsl, which still holds the ORIGINAL defaults — otherwise
         // every backend switch silently reverts the user's slider tweaks. Falls
         // back to the last-compiled DSL if toDsl() is unavailable or throws.
-        let dslToCompile = this._currentDsl
+        let dslToCompile = options.dsl ?? this._currentDsl
         try {
-            const liveDsl = this._programState?.toDsl?.()
+            const liveDsl = options.dsl === undefined ? this._programState?.toDsl?.() : null
             if (liveDsl && liveDsl.trim()) {
                 dslToCompile = liveDsl
             }

@@ -166,7 +166,7 @@ test(`${BROWSER}: an agent in the online session drives the owner's Foundry tab`
     const catalog = Object.fromEntries(described.envelope.result.commands.map(command => [command.name, command]))
     assert.deepEqual(catalog.setProgram.args.required, ['dsl'])
     assert.equal(catalog.getThumbnail.remote, true)
-    for (const name of ['exportZip', 'listSavedEffects', 'setBackend', 'importComposition', 'newEffect', 'loadEffect']) {
+    for (const name of ['exportZip', 'listSavedEffects', 'importComposition', 'newEffect', 'loadEffect']) {
         assert.equal(catalog[name].remote, false, name)
     }
 

@@ -19,7 +19,7 @@ function effectName(workspaceStore) {
     }
 }
 
-export function buildSnapshot({ renderer, workspaceStore, getDsl, isPaused, lastCompile }) {
+export function buildSnapshot({ renderer, workspaceStore, getDsl, isPaused, getPausedTime, lastCompile }) {
     const dsl = getDsl() || ''
     const canvas = renderer.canvas
     const compile = lastCompile()
@@ -37,7 +37,7 @@ export function buildSnapshot({ renderer, workspaceStore, getDsl, isPaused, last
         },
         compile: compile ? { ok: Boolean(compile.success), ...(compile.success ? {} : { error: String(compile.error || '').slice(0, 500) }) } : null,
         canvas: { width: canvas?.width ?? 0, height: canvas?.height ?? 0 },
-        playback: { playing: !isPaused(), loopDuration: renderer.loopDuration ?? null },
+        playback: { playing: !isPaused(), loopDuration: renderer.loopDuration ?? null, time: isPaused() ? getPausedTime?.() ?? null : null },
         backend: renderer.backend,
         history: { canUndo: workspaceStore.canUndo(), canRedo: workspaceStore.canRedo() },
     }

@@ -1,6 +1,7 @@
 # Dependencies
 node_modules/
 public/js/noisemaker/vendor/
+public/vendor/shade-mcp/
 
 # IDE
 .idea/

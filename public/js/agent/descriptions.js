@@ -110,14 +110,34 @@ export const COMMAND_GROUPS = [
         },
     },
     {
+        title: 'Shader source',
+        commands: {
+            checkShader: {
+                does: 'Returns advisory GLSL/WGSL findings. Supply exactly one of source or path; source requires language, paths infer .glsl/.wgsl. Session paths read only shared effect files. Findings do not block compilation or change a file.',
+                returns: '`{ language, advisory: true, findings: [{ rule, severity, line, message }] }`',
+            },
+            bundleShader: {
+                does: 'Inlines only referenced library symbols and their dependencies with upstream and technique credits. Accepts the same inputs as checkShader. Returns source unless write is explicitly true with a path; writes recompile like writeFile. Session writes require the shared work to match the running workspace.',
+                returns: '`{ source, added, credits, language, written, compiled? }`',
+            },
+        },
+    },
+    {
         title: 'Playback',
         commands: {
             play: { does: 'Starts the animation, like the play button.', returns: '`{ playing }`' },
             pause: { does: 'Stops the animation. The current frame stays visible.', returns: '`{ playing }`' },
+            renderAt: {
+                does: 'Pauses and renders exactly one frame at normalized time 0 through 1, with zero elapsed simulation time. Waits for GPU submission and returns the fresh canvas image using the getThumbnail sizing/format options; the paused frame stays visible. Session calls require the shared work to match the running workspace.',
+                returns: '`{ time, playing: false, bytes, mimeType, width, height }`; through a session, binary `image` metadata replaces bytes',
+            },
+            setLoopDuration: {
+                does: 'Sets the current loop length to finite positive seconds, including fractional seconds. Preserves playback state and the paused frame. Session calls require the shared work to match the running workspace.',
+                returns: '`{ seconds }`',
+            },
             setBackend: {
-                does: 'Renders with WebGL2 (the GLSL shaders) or WebGPU (the WGSL shaders), as opening a .glsl or .wgsl file in the editor does. Fails with BACKEND_UNAVAILABLE when the browser cannot.',
+                does: 'Renders with WebGL2 (the GLSL shaders) or WebGPU (the WGSL shaders), while preserving playback state and the paused frame. Session calls require the shared work to match the running workspace. Fails with BACKEND_UNAVAILABLE when the browser cannot.',
                 returns: '`{ backend }`',
-                remote: false,
             },
         },
     },

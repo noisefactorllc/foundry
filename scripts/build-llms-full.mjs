@@ -21,6 +21,7 @@ function describeType(spec) {
     const parts = [spec.type]
     if (spec.enum) parts.push(`one of ${spec.enum.map(code).join(', ')}`)
     if (typeof spec.min === 'number' && typeof spec.max === 'number') parts.push(`from ${spec.min} to ${spec.max}`)
+    if (typeof spec.exclusiveMinimum === 'number') parts.push(`greater than ${spec.exclusiveMinimum}`)
     if (typeof spec.minLength === 'number') {
         parts.push(`at least ${spec.minLength} character${spec.minLength === 1 ? '' : 's'}`)
     }
