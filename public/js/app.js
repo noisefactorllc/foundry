@@ -991,7 +991,7 @@ function initCanvasEditorControls() {
 function setOriginalDsl(dsl) {
     originalDsl = dsl
     if (canvasEditor && canvasEditorCurrentFile === 'dsl.txt') {
-        canvasEditor.value = dsl
+        canvasEditor.value = dslEditor.value
     }
 }
 

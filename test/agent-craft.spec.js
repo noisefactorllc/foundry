@@ -71,6 +71,22 @@ test('shader-craft agent commands use the GPU and preserve session-visible work'
         if (!process.env.CRAFT_CASES || new RegExp(process.env.CRAFT_CASES).test(name)) await t.test(name, action)
     }
 
+    await run('newline-terminated shared programs do not create an editor draft', async () => {
+        const source = `\n${dsl}\n`
+        assert.equal((await call('setProgram', { dsl: source, effect })).ok, true)
+        assert.equal(await page.evaluate(() => document.getElementById('canvas-editor').value), source)
+        for (const [name, args] of [
+            ['setLoopDuration', { seconds: 3.84 }],
+            ['renderAt', { time: 0.39, maxDimension: 32, format: 'png' }],
+        ]) {
+            const answer = await call(name, args)
+            assert.equal(answer.ok, true, JSON.stringify(answer.error))
+        }
+        await page.evaluate(source => { document.getElementById('canvas-editor').value = source + '// PRIVATE' }, source)
+        assert.equal((await call('renderAt', { time: 0.5 })).error?.code, 'REMOTE_UNAVAILABLE')
+        assert.equal((await call('setProgram', { dsl, effect })).ok, true)
+    })
+
     await run('bundle writes revalidate work and shader versions after module loading', async () => {
         const moduleUrl = `${origin}/vendor/shade-mcp/knowledge/shader-craft.js`
         let releaseModule, moduleRequested
