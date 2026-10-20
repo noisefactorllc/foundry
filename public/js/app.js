@@ -1511,6 +1511,8 @@ function refreshMenuBar() {
 // Whether "connect agent..." can help in the current session; set once online
 // collaboration exists (see the Online Session section below).
 let canConnectAgent = () => true
+// Whether this tab is in a session, so "go online..." offers going offline.
+let isOnline = () => false
 
 // Config for the shared handfish <menu-bar>. Handlers are the same closures
 // the old per-id listeners ran; dynamic fields are pulled on menu open,
@@ -1650,7 +1652,8 @@ if (menuBarEl) {
                                 })
                             },
                         },
-                        { id: 'goOnlineMenuItem', label: 'go online...', onSelect: () => seanceDialog?.show?.() },
+                        // Online, it offers the way back: it opens the session, where Go Offline is.
+                        { id: 'goOnlineMenuItem', label: () => isOnline() ? 'go offline...' : 'go online...', onSelect: () => seanceDialog?.show?.() },
                         { id: 'connectAgentMenuItem', label: 'connect agent...', hidden: () => !customElements.get('agent-connect-dialog') || !canConnectAgent(), onSelect: () => onlineCollaboration.showAgentDialog() },
                     ],
                 },
@@ -2282,6 +2285,7 @@ const onlineCollaboration = createOnlineCollaboration({
     createAgentRelay: ({ uploadImage, onAgent }) => createSeanceAgentRelay({ appVersion: FOUNDRY_VERSION, uploadImage, onAgent }),
 })
 canConnectAgent = () => onlineCollaboration.canConnectAgent()
+isOnline = () => ['online', 'readonly'].includes(onlineCollaboration.getStatus())
 
 // Undo and redo restore through the workspace's 'restore' event; wait for it.
 async function restoreHistory(step) {

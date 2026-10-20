@@ -293,6 +293,25 @@ test(`${BROWSER}: the tab that took the session online answers again after a rel
     assert.equal(state.from, again.from)
 })
 
+test(`${BROWSER}: while the work is online, "go online..." offers going offline`, { timeout: 300000 }, async t => {
+    const { origin, open } = await setUp(t)
+    const page = await open(origin)
+    // The label the menu shows when it next opens.
+    const label = () => page.evaluate(() => {
+        document.getElementById('menu').refresh()
+        return document.getElementById('goOnlineMenuItem').textContent.trim()
+    })
+    assert.equal(await label(), 'go online...')
+    await goOnline(page)
+    assert.equal(await label(), 'go offline...')
+    // It still opens the session, where Go Offline is.
+    await page.evaluate(() => document.getElementById('seanceDialog').hide())
+    await page.evaluate(() => document.getElementById('goOnlineMenuItem').click())
+    await page.locator('seance-dialog [data-action="go-offline"]').click()
+    await poll(() => page.evaluate(() => document.getElementById('seanceDialog').state), state => state === 'offline', { label: 'the offline state' })
+    assert.equal(await label(), 'go online...')
+})
+
 test(`${BROWSER}: connect agent walks the person through going online, copying the prompt and the agent joining`, { timeout: 300000 }, async t => {
     const { origin, seance, open } = await setUp(t)
     const page = await open(origin)
