@@ -194,9 +194,12 @@ export function createOnlineCollaboration({ dialog, notify, getDsl, setDsl, getE
                 // socket: the app wraps the socket class the SDK would use.
                 agentRelay = createAgentRelay?.({
                     uploadImage: blob => online.uploadImage(blob),
-                    // An agent's first request: the connect-agent dialog confirms it.
+                    // The first request on an agent's connection: the open
+                    // connect-agent dialog lights its last step and confirms as
+                    // it closes; with the dialog closed, confirm at once.
                     onAgent: () => {
-                        if (agentDialog) agentDialog.connected = true
+                        if (agentDialog?.open) agentDialog.connected = true
+                        else notify('Agent connected', 'success')
                     },
                 }) || null
                 online = sdk.createOnlineDslLayer({
@@ -400,9 +403,21 @@ export function createOnlineCollaboration({ dialog, notify, getDsl, setDsl, getE
         agentDialog?.show?.()
     }
 
+    /**
+     * "connect agent..." helps only where an agent can be answered: offline
+     * (going online makes this tab the session's), or online in the session
+     * this tab took online. A tab that joined someone else's session cannot.
+     */
+    function canConnectAgent() {
+        const state = status()
+        if (state === 'offline' || state === 'connecting') return true
+        return Boolean(agentRelay?.answers?.())
+    }
+
     return {
         takeOnline,
         showAgentDialog,
+        canConnectAgent,
         joinSession,
         joinFromUrlIfPresent,
         goOffline,

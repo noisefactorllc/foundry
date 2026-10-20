@@ -52,7 +52,7 @@ export function markAgentReady() {
  * commands that arrive in the person's session.
  *
  * @param {{appVersion: string, uploadImage: (blob: Blob) => Promise<string>, onAgent?: Function, BaseSocket?: typeof WebSocket}} options
- * @returns {{ WebSocket: typeof WebSocket, sessionCreated: (sessionId: string) => void }}
+ * @returns {{ WebSocket: typeof WebSocket, sessionCreated: (sessionId: string) => void, answers: () => boolean }}
  */
 export function createSeanceAgentRelay({ appVersion, uploadImage, onAgent, BaseSocket }) {
     return createAgentRelay({

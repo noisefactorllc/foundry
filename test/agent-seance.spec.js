@@ -2,9 +2,9 @@
 // that tab through the Seance agent relay (public/js/agent/relay.js).
 //
 // Starts Foundry and a local Seance server (see test/seance-local.js for
-// SEANCE_ROOT, SEANCE_PYTHON and SEANCE_DIST_DIR) on free local ports; the
-// connect-agent dialog comes from a handfish build in HANDFISH_DIST until
-// handfish publishes it. The
+// SEANCE_ROOT, SEANCE_PYTHON and SEANCE_DIST_DIR) on free local ports. The
+// connect-agent test runs its prompt's join line in /bin/sh with the shared
+// agent tool (SEANCE_AGENT_CLI, default the sibling Noisedeck checkout's). The
 // person's tab goes online through "go online..."; an agent written as the
 // shared agent tool behaves joins from Node. Only the owner's tab answers,
 // images travel as bytes, and commands that need the person at the browser
@@ -19,7 +19,7 @@ import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { deflateSync } from 'node:zlib'
-import { SeanceAgentClient, freePort, poll, routeHandfishDist, routeSeance, startSeanceServer } from './seance-local.js'
+import { SeanceAgentClient, freePort, poll, routeHandfishDist, routeSeance, runJoinLine, startSeanceServer } from './seance-local.js'
 
 const FOUNDRY = fileURLToPath(new URL('..', import.meta.url))
 const BROWSER = process.env.BROWSER || 'chromium'
@@ -91,6 +91,18 @@ async function setUp(t) {
         await routeHandfishDist(page)
         await routeSeance(page, seance.url)
         page.on('websocket', socket => socket.on('framesent', frame => sent.push(String(frame.payload))))
+        // Every toast the page shows, kept after it fades (window.__toasts).
+        await page.addInitScript(() => {
+            window.__toasts = []
+            new MutationObserver(records => {
+                for (const record of records) {
+                    for (const node of record.addedNodes) {
+                        const message = node.querySelector?.('.toast-message')
+                        if (message) window.__toasts.push(message.textContent)
+                    }
+                }
+            }).observe(document, { childList: true, subtree: true })
+        })
         await page.goto(url)
         await ready(page)
         return page
@@ -111,6 +123,15 @@ async function goOnline(page) {
     await poll(() => page.evaluate(() => document.getElementById('seanceDialog').state), state => state === 'online', { label: 'the online state' })
     return code
 }
+
+/** Wait until the page has shown a toast with this text. */
+const toastShown = (target, text) => poll(() => target.evaluate(() => window.__toasts), shown => shown.includes(text), { label: `the "${text}" toast` })
+
+/** Whether the menu hides "connect agent...", as it shows when the menu next opens. */
+const connectAgentHidden = target => target.evaluate(() => {
+    document.getElementById('menu').refresh()
+    return document.getElementById('connectAgentMenuItem').hidden
+})
 
 // The output canvas's center pixel, from a frame rendered now.
 const centerPixel = target => target.evaluate(() => {
@@ -140,6 +161,8 @@ test(`${BROWSER}: an agent in the online session drives the owner's Foundry tab`
     assert.equal(described.app, 'foundry')
     assert.equal(described.envelope.ok, true)
     const tab = described.from
+    // The person had no connect-agent dialog open: a toast confirms at once.
+    await toastShown(page, 'Agent connected')
     const catalog = Object.fromEntries(described.envelope.result.commands.map(command => [command.name, command]))
     assert.deepEqual(catalog.setProgram.args.required, ['dsl'])
     assert.equal(catalog.getThumbnail.remote, true)
@@ -237,6 +260,9 @@ test(`${BROWSER}: an agent in the online session drives the owner's Foundry tab`
     assert.equal(agent.ignored.length, before)
     assert.deepEqual(visitorSent.filter(text => text.includes('nf-agent/1')), [])
     assert.ok(ownerSent.some(text => text.includes('nf-agent/1')))
+    // Only the tab that took the session online offers "connect agent...".
+    assert.equal(await connectAgentHidden(page), false)
+    assert.equal(await connectAgentHidden(visitor), true)
 
     // The person's tab leaves. Seance makes another participant the owner; the
     // visitor's tab did not take the session online, so no tab answers.
@@ -263,8 +289,9 @@ test(`${BROWSER}: the tab that took the session online answers again after a rel
 })
 
 test(`${BROWSER}: connect agent walks the person through going online, copying the prompt and the agent joining`, { timeout: 300000 }, async t => {
-    const { origin, agent, open } = await setUp(t)
+    const { origin, seance, open } = await setUp(t)
     const page = await open(origin)
+    assert.equal(await connectAgentHidden(page), false)
     // The prompt the dialog copies, as the person's clipboard receives it.
     await page.evaluate(() => {
         window.__copied = []
@@ -290,11 +317,16 @@ test(`${BROWSER}: connect agent walks the person through going online, copying t
     assert.equal(prompt, expected)
     assert.ok(prompt.includes('https://foundry.noisedeck.app/llms-full.txt') && prompt.includes(`${origin}/?seance=${code}`))
 
-    // The agent follows the prompt's last line; its first request confirms it.
-    const joinUrl = prompt.trim().split('\n').at(-1).trim().split(' ').at(-1).replace(/^'|'$/g, '')
-    await agent.join(new URL(joinUrl).searchParams.get('seance'))
-    assert.equal((await agent.request('describe')).app, 'foundry')
+    // The agent runs the prompt's last line in a shell, as written; its first
+    // request confirms it.
+    const tool = runJoinLine(prompt.trim().split('\n').at(-1), { server: seance.url, origin })
+    t.after(tool.stop)
+    const joined = await tool.joined
+    assert.equal(joined.result.code, code)
+    assert.equal(joined.result.app, 'foundry')
     await poll(states, value => value.join() === 'done,done,done', { label: 'the Confirm step done' })
     await dialog.waitFor({ state: 'hidden', timeout: 10000 })
-    await page.locator('.toast-message').filter({ hasText: 'Agent connected' }).waitFor({ state: 'visible' })
+    await toastShown(page, 'Agent connected')
+    // The open dialog confirmed the agent; the app did not confirm it twice.
+    assert.deepEqual((await page.evaluate(() => window.__toasts)).filter(text => text === 'Agent connected'), ['Agent connected'])
 })

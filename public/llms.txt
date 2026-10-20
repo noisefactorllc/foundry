@@ -43,9 +43,9 @@ person already has open: their program, their custom effect, their canvas.
 | `node seance-agent.mjs set <file>` | Runs a program in the person's tab (setProgram). |
 | `node seance-agent.mjs look [--size N] [--format png\|jpg] [--out FILE]` | Saves an image of the person's canvas. Prints its path. Open the file with your image tool. |
 | `node seance-agent.mjs call <command> [JSON]` | Runs any command, for example `call writeFile '{"path":"glsl/glow.glsl","content":"..."}'`. |
-| `node seance-agent.mjs wait --doc main [--since REV] [--timeout S]` | Waits for the person to change the program, then prints it. (Without `--doc main` it also wakes for a change to the custom effect, and prints that document.) |
+| `node seance-agent.mjs wait [--since REV] [--timeout S]` | Waits for the person to change the program, then prints it. |
 | `node seance-agent.mjs image-put <file>` | Adds a PNG, JPEG, GIF or WebP file to the session. Prints `image:<id>`. |
-| `node seance-agent.mjs transfer <from> <to>` | Copies the program and its images from one joined session to another. |
+| `node seance-agent.mjs transfer <from> <to>` | Copies the program and its images from one joined session to another, and its custom effect where the target takes one. |
 | `node seance-agent.mjs leave` / `stop` | Leaves the session / stops the background process. |
 
 Every command prints JSON (`program` prints text). The exit code is 0 for
@@ -90,17 +90,10 @@ Foundry session and theirs, in either direction. The target app checks the
 program and refuses one that it cannot compile.
 
 A program that calls the custom effect (`search user ...`) runs only where that
-effect is. `transfer` copies the program text, not the effect. To move the
-effect to another Foundry or to Shade, which take the same Portable effect, read
-it and set it with the program:
-
-```sh
-node seance-agent.mjs call foundry getProgram > work.json
-# take result.envelope.result.dsl and .effect from work.json, then:
-node seance-agent.mjs call shade setProgram '{"dsl":"...","effect":{...}}'
-```
-
-Noisedeck, Polymorphic and Visualize take no custom effect through a session.
+effect is. `transfer` carries the effect too when the target's setProgram takes
+one, as another Foundry and Shade do (its result says `effect: "copied"`).
+Noisedeck, Polymorphic and Visualize take no custom effect through a session
+(`effect: "not taken by the target"`).
 The person can open the program with its effect and images in one of them
 with effect > edit in Noisedeck..., Noodles..., Polymorphic... or Shade....
 

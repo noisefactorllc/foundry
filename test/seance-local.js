@@ -4,7 +4,7 @@
 // SEANCE_ROOT is a Seance checkout (default ../seance), SEANCE_PYTHON the
 // Python that runs it, and SEANCE_DIST_DIR the browser SDK bundle that the
 // app's SDK URL is answered with.
-import { spawn } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { createServer } from 'node:net'
@@ -96,14 +96,38 @@ export async function routeSeance(page, url) {
 
 /**
  * Serve handfish from a local build (HANDFISH_DIST, a handfish dist directory)
- * instead of the CDN, to test a handfish change before it is released. The
- * connect-agent dialog needs it until handfish publishes the dialog.
+ * instead of the CDN, to test a handfish change before it is released.
  */
 export async function routeHandfishDist(page) {
     const dist = process.env.HANDFISH_DIST && resolve(process.env.HANDFISH_DIST)
     if (!dist) return
     await page.route('https://handfish.noisefactor.io/0/handfish.esm.min.js', route =>
         route.fulfill({ path: join(dist, 'handfish.esm.min.js'), contentType: 'text/javascript', headers: { 'Access-Control-Allow-Origin': '*' } }))
+}
+
+// The shared agent tool, as the connect-agent prompt tells an agent to fetch
+// it: SEANCE_AGENT_CLI, or the copy in a sibling Noisedeck checkout.
+const AGENT_CLI = resolve(process.env.SEANCE_AGENT_CLI || join(FOUNDRY, '../noisedeck/app/agent/seance-agent.mjs'))
+
+/**
+ * Run the join line of a connect-agent prompt in /bin/sh, as the person's
+ * agent runs it, with this Node and the shared agent tool in place of
+ * `node seance-agent.mjs`, against the local Seance server `server` for the
+ * app at `origin`. `joined` resolves with the tool's JSON output; `stop` ends
+ * the tool's background process and removes its state.
+ */
+export function runJoinLine(line, { server, origin }) {
+    if (!existsSync(AGENT_CLI)) throw new Error(`Set SEANCE_AGENT_CLI to the shared agent tool (seance-agent.mjs); ${AGENT_CLI} does not exist.`)
+    const home = mkdtempSync(join(tmpdir(), 'seance-agent-'))
+    const env = { ...process.env, SEANCE_AGENT_HOME: join(home, 'state'), SEANCE_AGENT_SERVER: server, SEANCE_AGENT_ORIGIN: origin }
+    const tool = `"${process.execPath}" "${AGENT_CLI}"`
+    const run = script => new Promise((done, fail) => execFile('/bin/sh', ['-c', script], { cwd: home, env }, (error, stdout) => {
+        if (error) fail(new Error(`${script}: ${error.message}\n${stdout}`))
+        else done(JSON.parse(stdout))
+    }))
+    const joined = run(line.trim().replace('node seance-agent.mjs', tool))
+    const stop = () => joined.catch(() => {}).then(() => run(`${tool} stop`)).catch(() => {}).finally(() => rmSync(home, { recursive: true, force: true }))
+    return { joined, stop }
 }
 
 const RELAY = 'nf-agent/1'

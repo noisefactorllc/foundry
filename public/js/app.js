@@ -1508,6 +1508,10 @@ function refreshMenuBar() {
     }
 }
 
+// Whether "connect agent..." can help in the current session; set once online
+// collaboration exists (see the Online Session section below).
+let canConnectAgent = () => true
+
 // Config for the shared handfish <menu-bar>. Handlers are the same closures
 // the old per-id listeners ran; dynamic fields are pulled on menu open,
 // after every activation, and on refreshMenuBar().
@@ -1647,7 +1651,7 @@ if (menuBarEl) {
                             },
                         },
                         { id: 'goOnlineMenuItem', label: 'go online...', onSelect: () => seanceDialog?.show?.() },
-                        { id: 'connectAgentMenuItem', label: 'connect agent...', hidden: () => !customElements.get('agent-connect-dialog'), onSelect: () => onlineCollaboration.showAgentDialog() },
+                        { id: 'connectAgentMenuItem', label: 'connect agent...', hidden: () => !customElements.get('agent-connect-dialog') || !canConnectAgent(), onSelect: () => onlineCollaboration.showAgentDialog() },
                     ],
                 },
             ],
@@ -2277,6 +2281,7 @@ const onlineCollaboration = createOnlineCollaboration({
     addImages,
     createAgentRelay: ({ uploadImage, onAgent }) => createSeanceAgentRelay({ appVersion: FOUNDRY_VERSION, uploadImage, onAgent }),
 })
+canConnectAgent = () => onlineCollaboration.canConnectAgent()
 
 // Undo and redo restore through the workspace's 'restore' event; wait for it.
 async function restoreHistory(step) {
