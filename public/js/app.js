@@ -2305,9 +2305,8 @@ bootstrapAgent({
     isPaused: () => isPaused,
     togglePlayPause,
     switchBackend: backend => autoSwitchBackend(backend),
-    loadEffect: (effectId, name, { remote } = {}) => remote
-        ? fromSession(() => loadEffectToWorkspace(effectId, name))
-        : loadEffectToWorkspace(effectId, name),
+    // Not through a session: it replaces the person's whole workspace.
+    loadEffect: (effectId, name) => loadEffectToWorkspace(effectId, name),
     refreshEffectDialog,
     exportZip: () => handleExport(),
     importComposition: composition => handleLoadFromUrl(composition),

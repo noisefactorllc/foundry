@@ -60,12 +60,14 @@ export const COMMAND_GROUPS = [
                 returns: '`{ path, chars, created, compiled: { success, error? } }`',
             },
             newEffect: {
-                does: 'Starts a new custom effect named `name` from synth/solid, like file > new effect.... The workspace is replaced.',
+                does: 'Starts a new custom effect named `name` from synth/solid, like file > new effect.... The workspace is replaced. Not through a session, where it would replace the person\'s whole workspace: its other files, its images and its undo history.',
                 returns: '`{ name, files, dsl, compiled }`',
+                remote: false,
             },
             loadEffect: {
-                does: 'Copies a library effect into the workspace as a custom effect under the `user` namespace, like file > import effect from library...: its definition, GLSL and WGSL shaders and help become workspace files, and a program that uses it runs. `name` renames the copy. The workspace is replaced.',
+                does: 'Copies a library effect into the workspace as a custom effect under the `user` namespace, like file > import effect from library...: its definition, GLSL and WGSL shaders and help become workspace files, and a program that uses it runs. `name` renames the copy. The workspace is replaced. Not through a session, where it would replace the person\'s whole workspace: its other files, its images and its undo history.',
                 returns: '`{ loaded: true, effectId, name, files, dsl, running }`',
+                remote: false,
             },
         },
     },

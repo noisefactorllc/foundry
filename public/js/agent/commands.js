@@ -291,10 +291,10 @@ export async function newEffect({ name }, ctx) {
         throw commandError('INVALID_ARGS_RANGE', 'name must be a DSL identifier, such as myEffect.', { field: 'name' })
     }
     // file > new effect...: synth/solid as the starting point, under `user`.
-    if (!await ctx.loadEffect('synth/solid', name, { remote: ctx.remote })) {
+    if (!await ctx.loadEffect('synth/solid', name)) {
         throw commandError('EFFECT_LOAD_FAILED', 'Could not start a new effect from synth/solid.', { effectId: 'synth/solid' })
     }
-    const outcome = await ctx.compile({ remote: ctx.remote })
+    const outcome = await ctx.compile()
     return { result: { name, files: [...ctx.workspaceStore.files.keys()].sort(), dsl: ctx.getDsl(), compiled: Boolean(outcome?.success) } }
 }
 
@@ -306,7 +306,7 @@ export async function loadEffect({ effectId, name }, ctx) {
         throw commandError('INVALID_ARGS_RANGE', 'name must be a DSL identifier, such as myEffect.', { field: 'name' })
     }
     // file > import effect from library...
-    if (!await ctx.loadEffect(effectId, name, { remote: ctx.remote })) {
+    if (!await ctx.loadEffect(effectId, name)) {
         throw commandError('EFFECT_LOAD_FAILED', `Could not load ${effectId} into the workspace.`, { effectId })
     }
     return {

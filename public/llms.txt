@@ -68,9 +68,11 @@ How it works, so you can explain it to the person:
 - Everyone in the session receives every answer, and anyone who can edit the
   session can send commands to that tab. So the person's saved effects
   (`listSavedEffects`, `loadSavedEffect`, `saveEffect`, `deleteSavedEffect`),
-  the ZIP download (`exportZip`), the rendering backend (`setBackend`) and
-  sharing links (`importComposition`) are not reachable through a session:
-  they answer `REMOTE_UNAVAILABLE`, and `commands` marks them.
+  the ZIP download (`exportZip`), the rendering backend (`setBackend`),
+  sharing links (`importComposition`), and `newEffect` and `loadEffect`, which
+  would replace the person's whole workspace with its images and undo history,
+  are not reachable through a session: they answer `REMOTE_UNAVAILABLE`, and
+  `commands` marks them.
   Suggest that the person goes offline (**Go Offline** in the same dialog) when
   you are done.
 - `look` asks the person's tab for an image of its canvas as it is; the tab
@@ -147,7 +149,9 @@ A custom effect is a Portable effect: the fields of definition.json plus
 workspace files and registers it as `user.<func>`.
 
 - Start from a library effect with `loadEffect` (file > import effect from
-  library...) or from synth/solid with `newEffect`; both replace the workspace.
+  library...) or from synth/solid with `newEffect`; both replace the workspace,
+  so they work only in the page. Through a session, set the effect with
+  `setProgram({ dsl, effect })`, below.
 - Change one file with `writeFile`, as the code editor does: the effect is
   registered again and the program compiles. `compiled.error` reports a shader
   that does not compile; the file stays written.

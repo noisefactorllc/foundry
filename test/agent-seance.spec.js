@@ -166,7 +166,7 @@ test(`${BROWSER}: an agent in the online session drives the owner's Foundry tab`
     const catalog = Object.fromEntries(described.envelope.result.commands.map(command => [command.name, command]))
     assert.deepEqual(catalog.setProgram.args.required, ['dsl'])
     assert.equal(catalog.getThumbnail.remote, true)
-    for (const name of ['exportZip', 'listSavedEffects', 'setBackend', 'importComposition']) {
+    for (const name of ['exportZip', 'listSavedEffects', 'setBackend', 'importComposition', 'newEffect', 'loadEffect']) {
         assert.equal(catalog[name].remote, false, name)
     }
 
@@ -238,11 +238,16 @@ test(`${BROWSER}: an agent in the online session drives the owner's Foundry tab`
     const linked = await agent.request('setProgram', { dsl: 'search synth\nmedia(url: "https://example.com/a.png").write(o0)\nrender(o0)' }, { to: tab })
     assert.equal(linked.envelope.error.code, 'OUTSIDE_LINK')
 
-    // Commands that need the person at the browser stay in the tab.
-    for (const command of ['exportZip', 'listSavedEffects']) {
-        const answer = await agent.request(command, {}, { to: tab })
-        assert.equal(answer.envelope.error.code, 'REMOTE_UNAVAILABLE', command)
+    // Commands that need the person at the browser stay in the tab. Starting
+    // or loading an effect would replace the person's whole workspace (its
+    // other files, its images, its undo history), so it stays there too.
+    const files = () => page.evaluate(() => [...window.effectWorkspace.workspaceStore.files.keys()].sort())
+    const workspaceBefore = await files()
+    for (const [command, args] of [['exportZip', {}], ['listSavedEffects', {}], ['newEffect', { name: 'fresh' }], ['loadEffect', { effectId: 'synth/noise' }]]) {
+        const answer = await agent.request(command, args, { to: tab })
+        assert.equal(answer.envelope.error?.code, 'REMOTE_UNAVAILABLE', command)
     }
+    assert.deepEqual(await files(), workspaceBefore)
     assert.equal((await agent.request('noSuchCommand', {}, { to: tab })).envelope.error.code, 'NOT_FOUND_COMMAND')
 
     // A second person opens the session link: they get the program, the custom
