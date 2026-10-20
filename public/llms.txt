@@ -233,6 +233,13 @@ times. These are strong suggestions, rather than extra enforcement by
 Foundry. (Source: shade-mcp `SHADER_CRAFT_WORKFLOW`, adapted from shader-skills
 at `e09bc993bf04201f26c03c87c89210e9b472f526`.)
 
+Parameterize the primitives that make up the composition: expose relevant
+shape, position, scale, stretch, deformation, material and motion controls.
+Keep reference-matching defaults, with wide finite ranges that permit
+nonphysical combinations. Global brightness or speed controls do not replace
+primitive-level controls. Bind the same typed arguments in every shader
+implementation and inspect each control's intended effect independently.
+
 ## Recreate a reference video
 
 This workflow is run by the person's own coding agent connected to Foundry.
