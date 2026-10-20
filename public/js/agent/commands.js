@@ -470,6 +470,13 @@ export async function bundleShader({ source, path, language, write = false }, ct
     if (write && path === undefined) throw commandError('INVALID_ARGS_REQUIRED', 'write: true requires a shader path.', { field: 'path' })
     if (write) requireSharedWork(ctx)
     const { bundleShaderSource } = await shaderCraft()
+    if (write) {
+        // Module loading can yield to editor or session changes. Validate again before the synchronous write.
+        requireSharedWork(ctx)
+        if (shaderInput({ path, language }, ctx).source !== input.source) {
+            throw commandError(ctx.remote ? 'REMOTE_UNAVAILABLE' : 'INVALID_PROGRAM', 'The shader changed while its bundle was loading. Run the bundle command again.')
+        }
+    }
     let bundled
     try { bundled = bundleShaderSource(input.source, input.language) }
     catch (err) { throw commandError('INVALID_PROGRAM', err?.message || String(err)) }

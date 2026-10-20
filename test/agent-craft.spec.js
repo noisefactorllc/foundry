@@ -71,6 +71,49 @@ test('shader-craft agent commands use the GPU and preserve session-visible work'
         if (!process.env.CRAFT_CASES || new RegExp(process.env.CRAFT_CASES).test(name)) await t.test(name, action)
     }
 
+    await run('bundle writes revalidate work and shader versions after module loading', async () => {
+        const moduleUrl = `${origin}/vendor/shade-mcp/knowledge/shader-craft.js`
+        let releaseModule, moduleRequested
+        const held = new Promise(resolve => { releaseModule = resolve })
+        const requested = new Promise(resolve => { moduleRequested = resolve })
+        await page.route(moduleUrl, async route => {
+            moduleRequested()
+            await held
+            await route.continue()
+        })
+        t.after(() => releaseModule())
+        const pending = call('bundleShader', { path: 'glsl/craftProbe.glsl', write: true })
+        await requested
+        const privateDraft = dsl + '\n// PRIVATE_DURING_IMPORT'
+        await page.evaluate(draft => { document.getElementById('canvas-editor').value = draft }, privateDraft)
+        releaseModule()
+        const refused = await pending
+        assert.equal(refused.error?.code, 'REMOTE_UNAVAILABLE')
+        assert.equal(await page.evaluate(() => document.getElementById('canvas-editor').value), privateDraft)
+        assert.equal(await page.evaluate(() => window.effectWorkspace.workspaceStore.getFile('glsl/craftProbe.glsl')), effect.shaders.craftProbe.glsl)
+        await page.unroute(moduleUrl)
+        await page.evaluate(dsl => { document.getElementById('canvas-editor').value = dsl }, dsl)
+
+        // Even a completed import yields. A newer shared file and matching workspace must not be replaced
+        // by a bundle calculated from the older source that this invocation originally read.
+        const changed = await page.evaluate(async ({ effect }) => {
+            const { bundleShader } = await import('/js/agent/commands.js')
+            const ctx = { ...window.FoundryAgent._ctx, remote: true }
+            const originalSessionText = ctx.sessionText
+            const pending = bundleShader({ path: 'glsl/craftProbe.glsl', write: true }, ctx)
+            const updated = JSON.parse(originalSessionText('effect'))
+            updated.shaders.craftProbe.glsl += '\n// NEW_SHARED_SHADER_VERSION'
+            ctx.sessionText = id => id === 'effect' ? JSON.stringify(updated) : originalSessionText(id)
+            window.effectWorkspace.workspaceStore.setFile('glsl/craftProbe.glsl', updated.shaders.craftProbe.glsl)
+            try { await pending; return { refused: false } }
+            catch (err) { return { refused: true, code: err.__agentError?.code,
+                shader: window.effectWorkspace.workspaceStore.getFile('glsl/craftProbe.glsl') } }
+            finally { window.effectWorkspace.workspaceStore.setFile('glsl/craftProbe.glsl', effect.shaders.craftProbe.glsl) }
+        }, { effect })
+        assert.equal(changed.refused, true)
+        assert.equal(changed.code, 'REMOTE_UNAVAILABLE')
+        assert.equal(changed.shader, effect.shaders.craftProbe.glsl + '\n// NEW_SHARED_SHADER_VERSION')
+    })
     await run('renderAt and session backend switching produce stable paused frames on both backends', async () => {
         await call('pause')
         const rendered = {}
