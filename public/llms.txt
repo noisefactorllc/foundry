@@ -242,6 +242,9 @@ implementation and inspect each control's intended effect independently.
 
 ## Recreate a reference video
 
+This workflow creates procedural interpretations of reference videos. It is
+not intended for photographic-quality reproductions.
+
 This workflow is run by the person's own coding agent connected to Foundry.
 Inspect the supplied video before writing shaders. Measure its duration,
 resolution, aspect ratio and cuts; sample the timeline and identify the
