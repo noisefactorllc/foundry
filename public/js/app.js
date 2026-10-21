@@ -1511,7 +1511,7 @@ function refreshMenuBar() {
 // Whether "connect agent..." can help in the current session; set once online
 // collaboration exists (see the Online Session section below).
 let canConnectAgent = () => true
-// Whether this tab is in a session, so "go online..." offers going offline.
+// Whether this tab is in a session, so "live collab..." offers going offline.
 let isOnline = () => false
 
 // Config for the shared handfish <menu-bar>. Handlers are the same closures
@@ -1653,7 +1653,7 @@ if (menuBarEl) {
                             },
                         },
                         // Online, it offers the way back: it opens the session, where Go Offline is.
-                        { id: 'goOnlineMenuItem', label: () => isOnline() ? 'go offline...' : 'go online...', onSelect: () => seanceDialog?.show?.() },
+                        { id: 'goOnlineMenuItem', label: () => isOnline() ? 'stop live collab' : 'live collab...', onSelect: () => seanceDialog?.show?.() },
                         { id: 'connectAgentMenuItem', label: 'connect agent...', hidden: () => !customElements.get('agent-connect-dialog') || !canConnectAgent(), onSelect: () => onlineCollaboration.showAgentDialog() },
                     ],
                 },

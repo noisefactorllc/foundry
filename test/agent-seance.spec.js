@@ -5,7 +5,7 @@
 // SEANCE_ROOT, SEANCE_PYTHON and SEANCE_DIST_DIR) on free local ports. The
 // connect-agent test runs its prompt's join line in /bin/sh with the shared
 // agent tool (SEANCE_AGENT_CLI, default the sibling Noisedeck checkout's). The
-// person's tab goes online through "go online..."; an agent written as the
+// person's tab goes online through "live collab..."; an agent written as the
 // shared agent tool behaves joins from Node. Only the owner's tab answers,
 // images travel as bytes, and commands that need the person at the browser
 // answer REMOTE_UNAVAILABLE.
@@ -115,7 +115,7 @@ const ready = async page => {
     await page.evaluate(() => window.FoundryAgent.ready)
 }
 
-/** The person takes the work online through "go online..."; returns the session code. */
+/** The person takes the work online through "live collab..."; returns the session code. */
 async function goOnline(page) {
     await page.evaluate(() => document.getElementById('goOnlineMenuItem').click())
     await page.locator('seance-dialog [data-action="take-online"]').click()
@@ -293,7 +293,7 @@ test(`${BROWSER}: the tab that took the session online answers again after a rel
     assert.equal(state.from, again.from)
 })
 
-test(`${BROWSER}: while the work is online, "go online..." offers going offline`, { timeout: 300000 }, async t => {
+test(`${BROWSER}: while the work is online, "live collab..." offers going offline`, { timeout: 300000 }, async t => {
     const { origin, open } = await setUp(t)
     const page = await open(origin)
     // The label the menu shows when it next opens.
@@ -301,15 +301,15 @@ test(`${BROWSER}: while the work is online, "go online..." offers going offline`
         document.getElementById('menu').refresh()
         return document.getElementById('goOnlineMenuItem').textContent.trim()
     })
-    assert.equal(await label(), 'go online...')
+    assert.equal(await label(), 'live collab...')
     await goOnline(page)
-    assert.equal(await label(), 'go offline...')
+    assert.equal(await label(), 'stop live collab')
     // It still opens the session, where Go Offline is.
     await page.evaluate(() => document.getElementById('seanceDialog').hide())
     await page.evaluate(() => document.getElementById('goOnlineMenuItem').click())
     await page.locator('seance-dialog [data-action="go-offline"]').click()
     await poll(() => page.evaluate(() => document.getElementById('seanceDialog').state), state => state === 'offline', { label: 'the offline state' })
-    assert.equal(await label(), 'go online...')
+    assert.equal(await label(), 'live collab...')
 })
 
 test(`${BROWSER}: connect agent walks the person through going online, copying the prompt and the agent joining`, { timeout: 300000 }, async t => {
