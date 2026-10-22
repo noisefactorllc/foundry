@@ -19,9 +19,9 @@ that defines it. Foundry does not enforce them: a program or a shader that
 breaks one still compiles and runs if the engine accepts it. Follow them
 anyway; other apps and other people's programs rely on them.
 
-For the roles and control paths of the other Noise Factor visual products,
-including Timeline's project-folder CLI and Layers' separate document, read
-the product map at https://noisedeck.app/llms-full.txt.
+For the roles and control paths of the other Noise Factor products,
+including Timeline's project-folder CLI and Layers' separate document, start
+from the platform guide at https://noisefactor.io/llms.txt.
 
 ## Connect to the person's Foundry
 
