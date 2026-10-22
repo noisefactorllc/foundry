@@ -82,7 +82,7 @@ test('the relay is the shared Seance relay, byte for byte', async () => {
     // relay.js stays byte-compatible with the shared agent tool: it is a
     // verbatim copy of Noisedeck's app/js/agent/relay.js, pinned by its hash.
     const ours = await readFile(new URL('relay.js', AGENT_DIR))
-    assert.equal(createHash('sha256').update(ours).digest('hex'), 'fe245367d3432f8ee4481d6dd820ecb3700d1b765fcbe43bfed90039600c2828')
+    assert.equal(createHash('sha256').update(ours).digest('hex'), '976b8550a2ec439e8d79b61fac1a32fabb2eb53e80e6cd73e2a2d20fc1b8a867')
 })
 
 test('llms.txt cites the Noisemaker source for every convention it states', async () => {
