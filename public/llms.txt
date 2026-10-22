@@ -19,6 +19,10 @@ that defines it. Foundry does not enforce them: a program or a shader that
 breaks one still compiles and runs if the engine accepts it. Follow them
 anyway; other apps and other people's programs rely on them.
 
+For the roles and control paths of the other Noise Factor visual products,
+including Timeline's project-folder CLI and Layers' separate document, read
+the product map at https://noisedeck.app/llms-full.txt.
+
 ## Connect to the person's Foundry
 
 Use this route when you can run shell commands. It works with the Foundry the
