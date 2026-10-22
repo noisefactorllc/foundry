@@ -31,7 +31,7 @@ person already has open: their program, their custom effect, their canvas.
 1. Ask the person to open https://foundry.noisedeck.app, choose **connect
    agent...** at the end of the effect menu, click **Go Online**, then **Copy
    Prompt**, and paste the prompt to you. The prompt names this file and the
-   session link. (Without that dialog: **go online...**, **Take Online**, then
+   session link. (Without that dialog: **live collab...**, **Take Online**, then
    send the link or the six-character code.)
 2. Get the agent tool. It needs Node 22.4 or later and nothing else:
    `curl -fsSLO https://noisedeck.app/agent/seance-agent.mjs`
@@ -45,17 +45,44 @@ person already has open: their program, their custom effect, their canvas.
 | `node seance-agent.mjs program [--json]` | Prints the session's program text (`--json` adds its `rev`). |
 | `node seance-agent.mjs validate <file>` | Checks a program (`-` reads standard input). |
 | `node seance-agent.mjs set <file>` | Runs a program in the person's tab (setProgram). |
-| `node seance-agent.mjs look [--size N] [--format png\|jpg] [--out FILE]` | Saves an image of the person's canvas. Prints its path. Open the file with your image tool. |
+| `node seance-agent.mjs look [--size N] [--format png\|jpg] [--out FILE]` | Saves an image of the person's canvas. Its path is `result.envelope.result.image.path`; open the file with your image tool. `--size` is 768 unless given, at most 1024. |
 | `node seance-agent.mjs call <command> [JSON]` | Runs any command, for example `call writeFile '{"path":"glsl/glow.glsl","content":"..."}'`. |
-| `node seance-agent.mjs wait [--since REV] [--timeout S]` | Waits for the person to change the program, then prints it. |
-| `node seance-agent.mjs image-put <file>` | Adds a PNG, JPEG, GIF or WebP file to the session. Prints `image:<id>`. |
+| `node seance-agent.mjs wait [--since REV] [--timeout S]` | Waits for the person to change the program, then prints it. `--doc effect` waits for a change to the custom effect instead. |
+| `node seance-agent.mjs image-put <file>` | Adds a PNG, JPEG, GIF or WebP file to the session. `result.ref` is its `image:<id>`. |
 | `node seance-agent.mjs transfer <from> <to>` | Copies the program and its images from one joined session to another, and its custom effect where the target takes one. |
 | `node seance-agent.mjs leave` / `stop` | Leaves the session / stops the background process. |
 
-Every command prints JSON (`program` prints text). The exit code is 0 for
-success, 1 when Foundry refused the command (read `result.envelope.error.code`),
-and 2 when the tool could not run it (read `error.code`). `node
-seance-agent.mjs help` lists every option and the tool's own error codes.
+Every command prints JSON, except `program` and `commands`, which print text
+(`--json` gives JSON). The exit code is 0 for success, 1 when Foundry refused
+the command (read `result.envelope.error.code`), and 2 when the tool could not
+run it (read `error.code`; the codes are listed below). `node seance-agent.mjs
+help` lists every option.
+
+Agent tool errors (exit code 2, `error.code`):
+
+- `NO_SESSION`: no session is joined, or more than one and none was named.
+- `UNKNOWN_SESSION`, `SESSION_LOCKED`, `REFUSED`: the session code is wrong or
+  expired, the session is locked, or the session refused the join.
+- `NO_APP_TAB`: the tab that took the session online did not answer. Ask the
+  person to keep it open, or to go online again and send the new code.
+- `TIMEOUT`: the tab did not answer in time. Check `status`, then try again.
+- `READONLY`: the session lets this agent only read the program text:
+  `program`, `wait` and `status` work, and every app command, `commands` and
+  `look` included, is refused. Ask the person to allow guests to edit.
+- `SESSION_CLOSED`, `SESSION_REFUSED`: the connection closed, or the session
+  server refused a request (the message says why).
+- `ISLAND`: a `transfer` to or from a Layers session. Layers shares nothing
+  with the other apps.
+- `IMAGE_FAILED`, `NO_DOCUMENT`, `USAGE`, `INVALID_JSON`: an image transfer
+  failed, a document is missing, or the command line was wrong.
+- `CONNECT_FAILED`, `RATE_LIMITED`: `join` could not reach the session server,
+  or the server is limiting joins from this address. Wait a minute, then join
+  again.
+- `INVALID_IMAGE`, `BAD_RESPONSE`: an image id is malformed, or the app sent
+  an answer that the tool could not read.
+- `DAEMON_FAILED`, `INTERNAL_ERROR`: the tool's background process did not
+  start, or the tool failed. If it happens again, run `stop` and join again.
+- A file that the tool cannot read gives the system's code, such as `ENOENT`.
 
 How it works, so you can explain it to the person:
 
@@ -76,8 +103,8 @@ How it works, so you can explain it to the person:
   would replace the person's whole workspace with its images and undo history,
   are not reachable through a session: they answer `REMOTE_UNAVAILABLE`, and
   `commands` marks them.
-  Suggest that the person goes offline (**Go Offline** in the same dialog) when
-  you are done.
+  Suggest that the person goes offline when you are done: **stop live collab**
+  in the effect menu opens the session dialog, which has **Go Offline**.
 - `look` asks the person's tab for an image of its canvas as it is; the tab
   adds the image to the session as its own bytes, and the tool saves it as a
   file. A session holds at most 32 images; the tab takes at most 16 images in
@@ -264,6 +291,10 @@ submission and returns its image. It leaves that frame paused for inspection;
 `play` resumes animation. In the page, image bytes use the same envelope as
 `getThumbnail`; through a session they travel as binary session images.
 Use `setBackend` and repeat the same samples to compare GLSL and WGSL.
+Through a session, every sampled frame is a session image: the tab takes at
+most 16 images in ten minutes (`IMAGE_LIMIT` with `details.retryAfter`), and a
+session holds at most 32. Plan strips within that budget, or sample in a
+browser you drive.
 
 Develop in milestones: composition and timeline, geometry and motion,
 materials and lighting, then detail. Critique rendered frames against the
