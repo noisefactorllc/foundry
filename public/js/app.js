@@ -1949,14 +1949,14 @@ const SHARE_TARGETS = {
 }
 
 /**
- * Load JSZip from its CDN if the page hasn't already.
+ * Load the vendored JSZip if the page hasn't already.
  * @returns {Promise<void>}
  */
 async function loadJSZip() {
     if (window.JSZip) return
     await new Promise((resolve, reject) => {
         const script = document.createElement('script')
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'
+        script.src = '/js/lib/jszip.min.js'
         script.onload = resolve
         script.onerror = () => reject(new Error('Failed to load JSZip'))
         document.head.appendChild(script)

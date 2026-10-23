@@ -162,7 +162,7 @@ export class ShareModal {
     async _loadJSZip() {
         return new Promise((resolve, reject) => {
             const script = document.createElement('script')
-            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'
+            script.src = '/js/lib/jszip.min.js'
             script.onload = resolve
             script.onerror = () => reject(new Error('Failed to load JSZip'))
             document.head.appendChild(script)
