@@ -542,10 +542,17 @@ export async function getThumbnail({ maxDimension = 256, format = 'jpg' }, ctx) 
     return { result: { mimeType, width: out.width, height: out.height }, image }
 }
 
-// file > export effect to zip: a browser download of the workspace.
+// file > export effect to zip: a browser download of the workspace. It succeeds
+// only once the browser has the ZIP.
 export async function exportZip(_args, ctx) {
-    await ctx.exportZip()
-    return { result: { started: true, name: ctx.workspaceStore.name || 'effect-workspace' } }
+    const outcome = await ctx.exportZip()
+    if (outcome?.empty) {
+        throw commandError('CONFLICT_NOTHING_TO_EXPORT', 'The workspace has no program, files or images to export. Nothing was downloaded.', {})
+    }
+    if (!outcome?.success) {
+        throw commandError('EXPORT_FAILED', `The ZIP export failed. Nothing was downloaded. ${outcome?.error || ''}`.trim(), {})
+    }
+    return { result: { started: true, name: outcome.name } }
 }
 
 function compositionCode(link) {

@@ -1875,7 +1875,15 @@ function handleRedo() {
     }
 }
 
-async function handleExport() {
+/**
+ * Download the workspace as a ZIP. Resolves to { success: true, name } once the
+ * browser has the download, or to { success: false, error } after the error
+ * toast. With requireContent, work with nothing to put in the archive is
+ * refused as { success: false, empty: true } and nothing downloads.
+ * @param {{requireContent?: boolean}} [options]
+ * @returns {Promise<{success: boolean, name?: string, error?: string, empty?: boolean}>}
+ */
+async function handleExport({ requireContent = false } = {}) {
     try {
         // Load JSZip dynamically if needed
         await loadJSZip()
@@ -1908,20 +1916,24 @@ async function handleExport() {
         for (const image of workspaceStore.images) {
             if (image.blob instanceof Blob) zip.file(imageFilePath(image), image.blob)
         }
-        
+        if (requireContent && !Object.keys(zip.files).length) return { success: false, empty: true }
+
         const blob = await zip.generateAsync({ type: 'blob' })
+        const name = workspaceStore.name || 'effect-workspace'
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = `${workspaceStore.name || 'effect-workspace'}.zip`
+        a.download = `${name}.zip`
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)
         URL.revokeObjectURL(url)
-        
+
         toast.success('Exported workspace')
+        return { success: true, name }
     } catch (error) {
         toast.error(`Export failed: ${error.message}`)
+        return { success: false, error: error.message }
     }
 }
 
@@ -2338,7 +2350,7 @@ bootstrapAgent({
     // Not through a session: it replaces the person's whole workspace.
     loadEffect: (effectId, name) => loadEffectToWorkspace(effectId, name),
     refreshEffectDialog,
-    exportZip: () => handleExport(),
+    exportZip: () => handleExport({ requireContent: true }),
     importComposition: composition => handleLoadFromUrl(composition),
     undo: ({ remote } = {}) => remote ? fromSession(() => restoreHistory('undo')) : restoreHistory('undo'),
     redo: ({ remote } = {}) => remote ? fromSession(() => restoreHistory('redo')) : restoreHistory('redo'),

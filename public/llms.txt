@@ -467,6 +467,8 @@ shaders/src/lang/diagnostics.js:5-28.)
 | `RENDER_FAILED` | the renderer did not produce the requested explicit frame |
 | `BACKEND_UNAVAILABLE` | the browser cannot render with that backend |
 | `IMPORT_FAILED` | the sharing link or code did not load |
+| `CONFLICT_NOTHING_TO_EXPORT` | `exportZip` downloaded nothing: the workspace has no program, files or images |
+| `EXPORT_FAILED` | `exportZip` downloaded nothing: the ZIP could not be built |
 | `REMOTE_UNAVAILABLE` | the command needs the person at the browser, and came through a session |
 | `IMAGE_LIMIT` | the tab already took 16 images in ten minutes. `details.retryAfter` is in seconds |
 | `IMAGE_AS_TEXT` | a session request or answer would carry an image as base64 text. Add the image with `image-put` and use `image:<sha256>` |

@@ -149,8 +149,8 @@ export const COMMAND_GROUPS = [
                 returns: '`{ bytes, mimeType, width, height }`, with `bytes` in base64. Through a session: `{ image: { id, mimeType, bytes }, mimeType, width, height }`, where `image.bytes` is the byte count',
             },
             exportZip: {
-                does: 'Starts a browser download of the workspace as a ZIP, like file > export effect to zip.',
-                returns: '`{ started: true, name }`',
+                does: 'Starts a browser download of the workspace as a ZIP, like file > export effect to zip, and answers once the browser has the download. Nothing downloads, and it fails with CONFLICT_NOTHING_TO_EXPORT when the workspace has no program, files or images, or with EXPORT_FAILED when the ZIP cannot be built.',
+                returns: '`{ started: true, name }`, for the download `<name>.zip`',
                 remote: false,
             },
         },

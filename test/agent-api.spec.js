@@ -11,6 +11,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
+import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { freePort, poll } from './seance-local.js'
 
@@ -166,5 +167,43 @@ test(`${BROWSER}: window.FoundryAgent runs programs, custom effects and workspac
     assert.equal(image.mimeType, 'image/png')
     assert.equal(image.isError, false)
     assert.equal(JSON.parse(image.text).result.bytes, undefined)
+
+    // exportZip succeeds only for a ZIP that the browser downloads.
+    const downloads = []
+    page.on('download', download => downloads.push(download))
+    const download = page.waitForEvent('download')
+    const exported = await call('exportZip')
+    assert.equal(exported.ok, true, JSON.stringify(exported.error))
+    const zipFile = await download
+    assert.equal(zipFile.suggestedFilename(), `${exported.result.name}.zip`)
+    const zipBytes = await readFile(await zipFile.path())
+    assert.equal(zipBytes.subarray(0, 2).toString(), 'PK')
+    const entries = await page.evaluate(async bytes => Object.keys((await window.JSZip.loadAsync(new Uint8Array(bytes))).files), [...zipBytes])
+    assert.ok(entries.includes('effect.dsl'), JSON.stringify(entries))
+
+    // A ZIP that cannot be generated is a failure: the person sees the error toast and nothing downloads.
+    await page.evaluate(() => {
+        const generate = window.JSZip.prototype.generateAsync
+        window.__restoreGenerate = () => { window.JSZip.prototype.generateAsync = generate }
+        window.JSZip.prototype.generateAsync = () => Promise.reject(new Error('injected generation failure'))
+    })
+    const delivered = downloads.length
+    const failed = await call('exportZip')
+    await page.evaluate(() => window.__restoreGenerate())
+    assert.equal(failed.ok, false)
+    assert.equal(failed.error.code, 'EXPORT_FAILED')
+    assert.match(failed.error.message, /injected generation failure/)
+    await page.locator('.toast-error .toast-message', { hasText: 'Export failed: injected generation failure' }).waitFor()
+
+    // Work with nothing to export is refused.
+    await page.evaluate(() => {
+        window.effectWorkspace.workspaceStore.clear()
+        document.getElementById('dsl-editor').value = ''
+    })
+    const empty = await call('exportZip')
+    assert.equal(empty.ok, false)
+    assert.equal(empty.error.code, 'CONFLICT_NOTHING_TO_EXPORT')
+    await page.waitForTimeout(500)
+    assert.equal(downloads.length, delivered)
     assert.deepEqual(errors, [])
 })

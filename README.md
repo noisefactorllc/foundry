@@ -13,16 +13,21 @@ A web-based effects editor with hot reload capability.
 
 ## Quick Start
 
+Requires Node.js 18 or later, Python 3 and curl. This repository is all you
+need: the browser loads the Noisemaker engine and its effects from
+shaders.noisedeck.app and the fonts from fonts.noisefactor.io.
+
 ```bash
 git clone https://github.com/noisefactorllc/foundry.git
 cd foundry
 
-# First-time setup: copies required resources from the shade/ sibling repo
-chmod +x setup.sh
-./setup.sh
-
-# Install dependencies and start
+# Install dependencies
 npm install
+
+# Install the pinned shader-craft resources (public/vendor/shade-mcp/)
+npm run build
+
+# Start
 npm start
 
 # Or for development with auto-restart
