@@ -8,7 +8,7 @@
  * startup (backing store derived from clientWidth/clientHeight).
  *
  * Requires the dev server running (PORT 3456 by default here).
- * Run: node test-startup-resize.mjs
+ * Run: node test/test-startup-resize.mjs
  */
 import { chromium } from 'playwright'
 

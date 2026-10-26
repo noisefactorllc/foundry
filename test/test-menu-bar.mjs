@@ -15,7 +15,7 @@
  *   - programmatic getElementById(id).click() delegation contract
  *
  * Requires the dev server running (PORT 3456 by default here).
- * Run: node test-menu-bar.mjs   (or TEST_URL=... node test-menu-bar.mjs)
+ * Run: node test/test-menu-bar.mjs   (or TEST_URL=... node test/test-menu-bar.mjs)
  */
 import { chromium } from 'playwright'
 

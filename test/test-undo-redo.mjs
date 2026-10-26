@@ -11,7 +11,7 @@
  *   - Cmd+Z when NOT editing performs a program undo
  *
  * Requires the dev server running (PORT 3456 by default here).
- * Run: node test-undo-redo.mjs
+ * Run: node test/test-undo-redo.mjs
  */
 import { chromium } from 'playwright'
 

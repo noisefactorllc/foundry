@@ -14,7 +14,7 @@
  *   - a composition with VALID dsl   -> success toast + no compiler error
  *
  * Requires the dev server running (PORT 3456 by default here).
- * Run: node test-import-from-url.mjs   (or TEST_URL=https://foundry.noisedeck.app ...)
+ * Run: node test/test-import-from-url.mjs   (or TEST_URL=https://foundry.noisedeck.app ...)
  */
 import { chromium } from 'playwright'
 

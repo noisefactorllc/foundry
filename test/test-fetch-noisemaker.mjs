@@ -6,11 +6,11 @@
  * file paths. Without validation, a hostile pin file or manifest could cause
  * path traversal (write outside the vendor dir) or SSRF (fetch internal hosts).
  *
- * Run: node test-fetch-noisemaker.mjs
+ * Run: node test/test-fetch-noisemaker.mjs
  */
 import assert from 'node:assert/strict'
 
-const mod = await import('./scripts/fetch-noisemaker.cjs')
+const mod = await import('../scripts/fetch-noisemaker.cjs')
 const { validateVersion, validateBaseUrl, validateEffectId } = mod.default || mod
 
 let passed = 0

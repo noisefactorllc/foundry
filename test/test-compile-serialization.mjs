@@ -13,8 +13,8 @@
  * still wins (no API/visual change — only intermediate frames are skipped).
  *
  * Requires the dev server running (PORT 3456 by default here).
- * Run: node test-compile-serialization.mjs
- *   or TEST_URL=https://foundry.noisedeck.app node test-compile-serialization.mjs
+ * Run: node test/test-compile-serialization.mjs
+ *   or TEST_URL=https://foundry.noisedeck.app node test/test-compile-serialization.mjs
  */
 import { chromium } from 'playwright'
 

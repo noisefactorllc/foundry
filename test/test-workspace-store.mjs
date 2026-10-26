@@ -9,7 +9,7 @@
  * (fromObject) must NOT leave the previous effect's history in place — else
  * an undo after load would resurrect the previous effect's files.
  *
- * Run: node test-workspace-store.mjs
+ * Run: node test/test-workspace-store.mjs
  */
 import assert from 'node:assert/strict'
 
@@ -26,7 +26,7 @@ function check(name, fn) {
     }
 }
 
-const { WorkspaceStore } = await import('./public/js/workspace/workspace-store.js')
+const { WorkspaceStore } = await import('../public/js/workspace/workspace-store.js')
 
 // --- File operations (characterization) -------------------------------------
 console.log('WorkspaceStore file operations')

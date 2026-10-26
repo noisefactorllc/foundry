@@ -10,7 +10,7 @@
  *   - a localStorage write failure (quota) surfaces a Storage toast.
  *
  * Requires the dev server running (PORT 3456 by default here).
- * Run: node test-error-surfacing.mjs
+ * Run: node test/test-error-surfacing.mjs
  */
 import { chromium } from 'playwright'
 

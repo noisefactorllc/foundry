@@ -11,7 +11,7 @@
  *      (close-on-error + db.onversionchange), the upgrade proceeds.
  *
  * Requires the dev server running (PORT 3456 by default here).
- * Run: node test-workspace-db.mjs
+ * Run: node test/test-workspace-db.mjs
  */
 import { chromium } from 'playwright'
 

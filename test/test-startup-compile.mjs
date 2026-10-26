@@ -11,7 +11,7 @@
  * module-eval, before init() runs) and wrap renderer.compile with a counter.
  *
  * Requires the dev server running (PORT 3456 by default here).
- * Run: node test-startup-compile.mjs
+ * Run: node test/test-startup-compile.mjs
  */
 import { chromium } from 'playwright'
 

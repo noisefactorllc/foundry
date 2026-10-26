@@ -8,7 +8,7 @@
  * and is flushed immediately when the tab is hidden).
  *
  * Requires the dev server running (PORT 3456 by default here).
- * Run: node test-autosave-debounce.mjs
+ * Run: node test/test-autosave-debounce.mjs
  */
 import { chromium } from 'playwright'
 

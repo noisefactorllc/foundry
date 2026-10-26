@@ -13,7 +13,7 @@
  * This counts renderer.compile() invocations per gesture and asserts exactly one.
  *
  * Requires the dev server running (PORT 3456 by default here).
- * Run: node test-compile-triggers.mjs
+ * Run: node test/test-compile-triggers.mjs
  */
 import { chromium } from 'playwright'
 

@@ -8,7 +8,7 @@
  *   - the onerror sentinel never fires
  *
  * Requires the dev server running (PORT 3456 by default here).
- * Run: node test-xss-verify.mjs
+ * Run: node test/test-xss-verify.mjs
  */
 import { chromium } from 'playwright'
 

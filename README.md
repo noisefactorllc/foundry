@@ -52,7 +52,7 @@ node node_modules/playwright/cli.js install chromium
 npm run test:smoke
 ```
 
-CI requires both checks. They do not run the service integration suites. Those are separate `test/*.spec.js` files and root `test-*.mjs` scripts; some require a running app, GPU support, or related service sources. See [CONTRIBUTING.md](CONTRIBUTING.md) before running them.
+CI requires both checks. They do not run the service integration suites. Those are separate `test/*.spec.js` files and `test/test-*.mjs` scripts; some require a running app, GPU support, or related service sources. See [CONTRIBUTING.md](CONTRIBUTING.md) before running them.
 
 `public/` contains the browser application. `server/index.js` serves it locally. `pull-shade-mcp` prepares the pinned shader reference material. `scripts/build-llms-full.mjs` generates the full agent reference from its source documents and command definitions.
 

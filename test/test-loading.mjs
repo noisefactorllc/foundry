@@ -38,7 +38,7 @@ async function testLoading() {
     
     try {
         // Navigate to Effect Workspace
-        console.log('Navigating to http://localhost:3000...'););
+        console.log('Navigating to http://localhost:3000...');
         await page.goto('http://localhost:3000', { 
             waitUntil: 'networkidle',
             timeout: 30000 

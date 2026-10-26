@@ -13,7 +13,7 @@
  *      throws while the loop was running, the render loop must be restarted.
  *
  * Requires the dev server running (PORT 3456 by default here).
- * Run: node test-renderer-backend.mjs
+ * Run: node test/test-renderer-backend.mjs
  */
 import { chromium } from 'playwright'
 
