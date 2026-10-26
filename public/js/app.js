@@ -1949,7 +1949,7 @@ const SHARE_TARGETS = {
 }
 
 /**
- * Load the vendored JSZip if the page hasn't already.
+ * Load the bundled JSZip library if the page hasn't already.
  * @returns {Promise<void>}
  */
 async function loadJSZip() {

@@ -1,14 +1,15 @@
 {
-  "name": "effect-workspace",
+  "name": "foundry",
   "version": "0.9.0-SNAPSHOT",
-  "description": "Hot-reload effects editor",
+  "description": "Browser-based Noisemaker effects editor",
   "type": "module",
   "main": "server/index.js",
   "scripts": {
     "build": "python3 pull-shade-mcp",
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "test:smoke": "node --test test/release-smoke.spec.js"
   },
   "dependencies": {
     "cors": "^2.8.6",
@@ -20,6 +21,15 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "author": "",
-  "license": "MIT"
+  "author": "Noise Factor LLC",
+  "license": "MIT",
+  "private": true,
+  "homepage": "https://foundry.noisedeck.app/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/noisefactorllc/foundry.git"
+  },
+  "bugs": {
+    "url": "https://github.com/noisefactorllc/foundry/issues"
+  }
 }

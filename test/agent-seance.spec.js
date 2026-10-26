@@ -4,7 +4,7 @@
 // Starts Foundry and a local Seance server (see test/seance-local.js for
 // SEANCE_ROOT, SEANCE_PYTHON and SEANCE_DIST_DIR) on free local ports. The
 // connect-agent test runs its prompt's join line in /bin/sh with the shared
-// agent tool (SEANCE_AGENT_CLI, default the sibling Noisedeck checkout's). The
+// agent tool selected by SEANCE_AGENT_CLI. The
 // person's tab goes online through "live collab..."; an agent written as the
 // shared agent tool behaves joins from Node. Only the owner's tab answers,
 // images travel as bytes, and commands that need the person at the browser

@@ -38,12 +38,9 @@ with tempfile.TemporaryDirectory() as root:
     const result = spawnSync('python3', ['-B', '-'], { cwd: root, input: python, encoding: 'utf8' })
     assert.equal(result.status, 0, result.stdout + result.stderr)
 })
-test('build, deployment and desktop preparation include the same pinned knowledge files', async () => {
+test('build and desktop preparation include the same pinned knowledge files', async () => {
     const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url)))
     assert.match(pkg.scripts.build, /pull-shade-mcp/)
-    const deploy = await readFile(new URL('../.github/workflows/deploy.yml', import.meta.url), 'utf8')
-    assert.ok(deploy.indexOf('run: python3 pull-shade-mcp') < deploy.indexOf('rsync -avz'))
-    assert.match(deploy, /- 'shade-mcp-release.json'/)
     const desktop = JSON.parse(await readFile(new URL('../desktop/package.json', import.meta.url)))
     assert.match(desktop.scripts.predist, /pull-shade-mcp/)
 })

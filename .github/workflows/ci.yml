@@ -16,18 +16,7 @@ on:
       - '!.editorconfig'
   push:
     branches: [main, preview]
-    paths:
-      - '**'
-      - '!*.md'
-      - '!*.rst'
-      - '!*.adoc'
-      - '!docs/**'
-      - '!LICENSE*'
-      - '!.github/ISSUE_TEMPLATE/**'
-      - '!.github/PULL_REQUEST_TEMPLATE*'
-      - '!.github/dependabot.yml'
-      - '!.github/dependabot.yaml'
-      - '!.editorconfig'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -58,7 +47,7 @@ jobs:
         # deps and do not need postinstall. If a repo's build genuinely needs a
         # rebuild, that fails only this dep-bump PR's gate (surfaces in triage),
         # never a production build.
-        run: npm ci --ignore-scripts
+        run: npm ci --ignore-scripts --no-bin-links
 
       - name: Lint
         run: |
@@ -82,10 +71,6 @@ jobs:
           fi
 
       - name: Unit tests
-        # continue-on-error so E2E tests that need a browser/server/DB don't
-        # block patch auto-merge. Install + Lint + Build are the real gates
-        # for dep-bump compatibility; tests are informational here.
-        continue-on-error: true
         run: |
           if jq -e '.scripts.test' package.json >/dev/null 2>&1; then
             test_cmd=$(jq -r '.scripts.test' package.json)
@@ -99,3 +84,8 @@ jobs:
           else
             echo "No test script — skipping"
           fi
+
+      - name: Browser release smoke
+        run: |
+          node node_modules/playwright/cli.js install --with-deps chromium
+          npm run test:smoke

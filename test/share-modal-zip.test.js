@@ -14,7 +14,7 @@ import vm from 'node:vm'
 
 const source = readFileSync(new URL('../public/js/ui/share-modal.js', import.meta.url), 'utf8')
 const start = source.indexOf('    async _createEffectZip() {')
-const end = source.indexOf('    /**\n     * Load JSZip library from CDN')
+const end = source.indexOf('    async _loadJSZip()', start)
 assert.ok(start >= 0 && end > start, '_createEffectZip source slice found')
 
 function runCreateEffectZip({ files }) {

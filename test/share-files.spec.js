@@ -1,22 +1,18 @@
 // End-to-end: Foundry shares images as files through a real sharing server.
 //
-// Starts the sharing service (SHARING_REPO, default ../../sharing) and Foundry
-// on free local ports, routes https://sharing.noisedeck.app to the local
-// service, and drives Foundry headless. Run: node --test test/share-files.spec.js
+// Uses a local sharing API at SHARING_TEST_URL and starts Foundry on a free
+// local port. Run: node --test test/share-files.spec.js
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createServer } from 'node:net'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { deflateSync } from 'node:zlib'
 import { chromium } from 'playwright'
 
 const FOUNDRY = fileURLToPath(new URL('..', import.meta.url))
-const SHARING = process.env.SHARING_REPO || fileURLToPath(new URL('../../sharing', import.meta.url))
 const TEXT_IMAGE = /base64|data:image|dataUrl/
 
 const digest = bytes => createHash('sha256').update(bytes).digest('hex')
@@ -65,16 +61,16 @@ const stopServer = child => new Promise(resolve => {
 })
 
 test('Foundry shares images as files and reopens them from the sharing service', { timeout: 300000 }, async () => {
-    const dataDir = await mkdtemp(join(tmpdir(), 'foundry-share-data-'))
-    const imagesDir = await mkdtemp(join(tmpdir(), 'foundry-share-images-'))
-    const sharingPort = await freePort(), foundryPort = await freePort()
-    const SHARING_LOCAL = `http://127.0.0.1:${sharingPort}`
+    assert.ok(process.env.SHARING_TEST_URL, 'Set SHARING_TEST_URL to an isolated local sharing API')
+    const sharingUrl = new URL(process.env.SHARING_TEST_URL)
+    assert.equal(sharingUrl.protocol, 'http:')
+    assert.ok(['127.0.0.1', 'localhost', '[::1]'].includes(sharingUrl.hostname), 'The sharing test must use a loopback service')
+    assert.equal(sharingUrl.username + sharingUrl.password, '')
+    const foundryPort = await freePort()
+    const SHARING_LOCAL = sharingUrl.origin
     const FOUNDRY_ORIGIN = `http://127.0.0.1:${foundryPort}`
-    let sharing, foundry, browser
+    let foundry, browser
     try {
-        sharing = await startServer(SHARING, {
-            PORT: String(sharingPort), BASE_URL: 'https://sharing.noisedeck.app', SHARING_DATA_DIR: dataDir, SHARING_IMAGES_DIR: imagesDir
-        }, `${SHARING_LOCAL}/api/health`)
         foundry = await startServer(FOUNDRY, { PORT: String(foundryPort), HOST: '127.0.0.1' }, `${FOUNDRY_ORIGIN}/health`)
         browser = await chromium.launch({
             headless: true,
@@ -128,14 +124,16 @@ test('Foundry shares images as files and reopens them from the sharing service',
             return pixel
         }
 
-        const stored = async code => {
-            const dir = join(dataDir, code.slice(0, 2))
-            return {
-                entry: await readFile(join(dir, `${code}.json`), 'utf8'),
-                screenshot: await readFile(join(dir, `${code}.jpg`)).catch(() => null)
-            }
+        const bytesAt = async path => {
+            const response = await fetch(`${SHARING_LOCAL}${path}`)
+            assert.equal(response.status, 200, path)
+            return Buffer.from(await response.arrayBuffer())
         }
-        const storedImage = id => readFile(join(imagesDir, id.slice(0, 2), id))
+        const stored = async code => ({
+            entry: (await bytesAt(`/api/composition/${code}?images=files`)).toString('utf8'),
+            screenshot: await bytesAt(`/screenshot/${code}`),
+        })
+        const storedImage = id => bytesAt(`/api/images/${id}`)
 
         // The image records a page holds: each must hold its bytes as a Blob and no text.
         const heldImages = (page, holder) => page.evaluate(holder => {
@@ -316,7 +314,7 @@ test('Foundry shares images as files and reopens them from the sharing service',
                 dsl: `search synth\nmedia(url: "image:${RED_ID}").write(o0)\nmedia(url: "image:${BLUE_ID}").write(o1)\nrender(o0)`,
                 title: 'Noisedeck Program',
                 description: 'Created with Noisedeck',
-                screenshot: await upload(await readFile(join(dataDir, sharedCode.slice(0, 2), `${sharedCode}.jpg`)), 'image/jpeg'),
+                screenshot: await upload((await stored(sharedCode)).screenshot, 'image/jpeg'),
                 ttlMinutes: 60
             })
         })).json()
@@ -478,8 +476,5 @@ test('Foundry shares images as files and reopens them from the sharing service',
     } finally {
         await browser?.close()
         await stopServer(foundry)
-        await stopServer(sharing)
-        await rm(dataDir, { recursive: true, force: true })
-        await rm(imagesDir, { recursive: true, force: true })
     }
 })

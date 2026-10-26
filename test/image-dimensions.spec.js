@@ -8,7 +8,7 @@ import { chromium } from 'playwright'
 
 test('original image dimensions survive ProgramState controls and DSL regeneration', { timeout: 60000 }, async () => {
     const root = fileURLToPath(new URL('../public/', import.meta.url))
-    const helper = process.env.PORTABLE_IMAGES_MODULE || fileURLToPath(new URL('../../sharing/public/js/portableImages.js', import.meta.url))
+    const helper = process.env.PORTABLE_IMAGES_MODULE
     const server = createServer(async (request, response) => {
         const path = new URL(request.url, 'http://localhost').pathname
         if (path === '/') { response.setHeader('Content-Type', 'text/html'); response.end('<!doctype html><body></body>'); return }
@@ -24,7 +24,7 @@ test('original image dimensions survive ProgramState controls and DSL regenerati
     try {
         browser = await chromium.launch({ headless: true, args: process.platform === 'darwin' ? ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] : ['--enable-unsafe-swiftshader'] })
         const page = await browser.newPage()
-        await page.route('https://sharing.noisedeck.app/js/portableImages.js*', route => route.fulfill({
+        if (helper) await page.route('https://sharing.noisedeck.app/js/portableImages.js*', route => route.fulfill({
             contentType: 'text/javascript', path: helper, headers: { 'Access-Control-Allow-Origin': '*' },
         }))
         await page.goto(`http://127.0.0.1:${server.address().port}`)

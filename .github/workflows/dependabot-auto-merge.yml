@@ -52,7 +52,7 @@ on:
       - Shaders                      # noisemaker
       - Claude Code Review           # noisedeck
       - API check                    # handfish
-      - Test dashboard-traffic awk   # scaffold
+      - Test dashboard-traffic awk
     types: [completed]
   schedule:
     # Safety net: catch anything the fast path dropped.
@@ -68,16 +68,13 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name != 'workflow_run' || github.event.workflow_run.event == 'pull_request'
     steps:
-      - name: Mint EHSRE app token
+      - name: Mint automation token
         id: app-token
-        # EHSRE_APP_PRIVATE_KEY is an org secret with visibility=private, so it
-        # is absent in public repos. continue-on-error lets us fall back to
-        # github.token (which has write access and suffices for merge + approve).
-        continue-on-error: true
+        # A repository-scoped automation token lets a merge trigger CI.
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          client-id: Iv23liy6T6BW0BXuZRzx
-          private-key: ${{ secrets.EHSRE_APP_PRIVATE_KEY }}
+          client-id: ${{ secrets.AUTOMATION_APP_CLIENT_ID }}
+          private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
           permission-contents: write
           permission-pull-requests: write
           permission-actions: read
@@ -85,7 +82,7 @@ jobs:
       - name: Evaluate and merge
         id: eval
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           REPO: ${{ github.repository }}
           EVENT: ${{ github.event_name }}
           RUN_SHA: ${{ github.event.workflow_run.head_sha }}
@@ -132,7 +129,7 @@ jobs:
               echo "sweep: no open Dependabot PRs"
               exit 0
             fi
-            echo "sweep: evaluating $(echo $CANDIDATES | wc -w) open Dependabot PR(s)"
+            echo "sweep: evaluating $(printf '%s\n' "$CANDIDATES" | wc -w) open Dependabot PR(s)"
           fi
 
           evaluate_pr() {
@@ -151,7 +148,7 @@ jobs:
               return 0
             fi
 
-            # Verify every CI run for this SHA passed. The EHSRE app has no
+            # Verify every CI run for this SHA passed. The automation token has no
             # `checks` permission, so read Actions workflow runs (covered by
             # `actions`) instead of check-runs. Consider only PR-triggered CI
             # runs, which excludes this workflow_run-triggered auto-merge run.
@@ -205,6 +202,8 @@ jobs:
             # line so changelog prose ("migrated from 2 to 3 phases") cannot be
             # misread as a version bump.
             body_pairs() {
+              # The pattern matches literal backticks in dependency names.
+              # shellcheck disable=SC2016
               printf '%s' "$BODY" \
                 | grep -oE 'Updates `[^`]+` from [0-9][0-9.]* to [0-9][0-9.]*' \
                 | sed -E 's/.* from ([0-9]+)[^ ]* to ([0-9]+).*/\1 \2/' || true

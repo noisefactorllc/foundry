@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { pathToFileURL } from 'node:url'
 import { deflateSync } from 'node:zlib'
 import vm from 'node:vm'
 
@@ -17,21 +17,18 @@ const source = sharingLoaderSource
     .replaceAll(HELPER_URL, `'data:text/javascript;base64,${Buffer.from(portableImagesStub).toString('base64')}'`)
 const loader = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'))
 
-// The real sharing image helpers (SHARING_REPO, default ../../sharing). The
-// sibling checkout is private, so where it is not checked out the helpers are
-// fetched from the same URL sharingLoader.js loads in the browser — the exact
-// module, pinned at the same `v` (read out of sharingLoader.js's source). No
-// test is skipped.
-const SHARING = process.env.SHARING_REPO || fileURLToPath(new URL('../../sharing', import.meta.url))
+// Test the same public helper that the browser loads. A local module can be supplied explicitly.
 const sharingLoaderText = await readFile(new URL('../public/js/sharingLoader.js', import.meta.url), 'utf8')
 const helperPin = sharingLoaderText.match(/^export const PORTABLE_IMAGES_URL = '(.+)'$/m)?.[1]
-const helper = await import(pathToFileURL(`${SHARING}/public/js/portableImages.js`).href).catch(async () => {
-    const response = await fetch(helperPin || 'https://sharing.noisedeck.app/js/portableImages.js')
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
-    const text = await response.text()
-    if (!/\bexport\b/.test(text)) throw new Error('served helper is not a module')
-    return import(`data:text/javascript;base64,${Buffer.from(text).toString('base64')}`)
-})
+const helper = process.env.PORTABLE_IMAGES_MODULE
+    ? await import(pathToFileURL(process.env.PORTABLE_IMAGES_MODULE).href)
+    : await (async () => {
+        const response = await fetch(helperPin)
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        const text = await response.text()
+        if (!/\bexport\b/.test(text)) throw new Error('served helper is not a module')
+        return import(`data:text/javascript;base64,${Buffer.from(text).toString('base64')}`)
+    })()
 const { imageFileRecords } = await import('../public/js/imageRecords.js')
 
 /** A 2x2 PNG of one color, its SHA-256 id, and the base64 data URL earlier records carried. */

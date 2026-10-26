@@ -105,9 +105,8 @@ export async function routeHandfishDist(page) {
         route.fulfill({ path: join(dist, 'handfish.esm.min.js'), contentType: 'text/javascript', headers: { 'Access-Control-Allow-Origin': '*' } }))
 }
 
-// The shared agent tool, as the connect-agent prompt tells an agent to fetch
-// it: SEANCE_AGENT_CLI, or the copy in a sibling Noisedeck checkout.
-const AGENT_CLI = resolve(process.env.SEANCE_AGENT_CLI || join(FOUNDRY, '../noisedeck/app/agent/seance-agent.mjs'))
+// The shared agent tool downloaded from the connect-agent prompt's public URL.
+const AGENT_CLI = process.env.SEANCE_AGENT_CLI && resolve(process.env.SEANCE_AGENT_CLI)
 
 /**
  * Run the join line of a connect-agent prompt in /bin/sh, as the person's
@@ -117,7 +116,7 @@ const AGENT_CLI = resolve(process.env.SEANCE_AGENT_CLI || join(FOUNDRY, '../nois
  * the tool's background process and removes its state.
  */
 export function runJoinLine(line, { server, origin }) {
-    if (!existsSync(AGENT_CLI)) throw new Error(`Set SEANCE_AGENT_CLI to the shared agent tool (seance-agent.mjs); ${AGENT_CLI} does not exist.`)
+    if (!AGENT_CLI || !existsSync(AGENT_CLI)) throw new Error('Set SEANCE_AGENT_CLI to the shared agent tool (seance-agent.mjs).')
     const home = mkdtempSync(join(tmpdir(), 'seance-agent-'))
     const env = { ...process.env, SEANCE_AGENT_HOME: join(home, 'state'), SEANCE_AGENT_SERVER: server, SEANCE_AGENT_ORIGIN: origin }
     const tool = `"${process.execPath}" "${AGENT_CLI}"`

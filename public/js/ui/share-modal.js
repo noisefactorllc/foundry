@@ -119,7 +119,7 @@ export class ShareModal {
         }
 
         try {
-            // Dynamically load JSZip from CDN
+            // Load the bundled JSZip library
             if (!window.JSZip) {
                 await this._loadJSZip()
             }
@@ -156,7 +156,7 @@ export class ShareModal {
     }
 
     /**
-     * Load JSZip library from CDN
+     * Load the bundled JSZip library
      * @private
      */
     async _loadJSZip() {
