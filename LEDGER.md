@@ -3,7 +3,7 @@
 <!-- ai-contract-checkpoint:start -->
 ## AI contract checkpoint
 
-Last good source revision: `b9a6fca879efd5ca62e2756362204012d6dcfcce`.
+Last good source revision: `6efafc5d4a679d5cf263e372d8b72a8fdccedcc3`.
 
 The tracked AI contracts were independently audited against that source revision.
 
@@ -16,7 +16,7 @@ The tracked AI contracts were independently audited against that source revision
   "repository": "noisefactorllc/foundry",
   "branch": "main",
   "last_good": {
-    "revision": "b9a6fca879efd5ca62e2756362204012d6dcfcce",
+    "revision": "6efafc5d4a679d5cf263e372d8b72a8fdccedcc3",
     "contracts": [
       {
         "path": "public/llms-full.txt",
@@ -27,7 +27,7 @@ The tracked AI contracts were independently audited against that source revision
         "sha": "0ff8bad88d1a140905b594075f390726fc7f57b4"
       }
     ],
-    "verified_at": "2026-10-25T13:02:21.204Z"
+    "verified_at": "2026-10-29T04:26:37.533Z"
   }
 }
 ```
