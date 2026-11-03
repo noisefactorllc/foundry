@@ -11,6 +11,7 @@
 import { CanvasRenderer, ProgramState, extractEffectNamesFromDsl, extractEffectsFromDsl, getEffect, getAllEffects } from './bundle.js'
 import { loadImageTools } from '../sharingLoader.js'
 import { imageFileRecords } from '../imageRecords.js'
+import { takeInlineImages } from '../inlineImages.js'
 
 /**
  * ShadeRenderer - Main rendering class for Shade
@@ -422,6 +423,13 @@ export class ShadeRenderer {
             if (this._imageTools) {
                 const images = new Map([...this.images, ...(options.workspaceStore?.images || [])].map(image => [image.id, image]))
                 const referencedIds = new Set(this._imageTools.getMediaSources(dsl).map(source => source.url?.startsWith('image:') ? source.url.slice(6) : null))
+                // An image the program carries inline is held as a Blob record
+                // too, so the workspace keeps its bytes in IndexedDB.
+                const inline = await takeInlineImages(dsl, this._imageTools).catch(() => ({ images: [] }))
+                for (const image of inline.images) {
+                    if (!images.has(image.id)) images.set(image.id, image)
+                    referencedIds.add(image.id)
+                }
                 this.images = [...images.values()].filter(image => referencedIds.has(image.id))
                 this._imageDimensions = await this._imageTools.bindMediaImages(this._renderer, dsl, this.images, { extractEffectsFromDsl })
                 this._applyImageDimensions()

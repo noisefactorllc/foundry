@@ -15,7 +15,8 @@ import { OpenEffectDialog } from './ui/open-effect-dialog.js'
 import { ImportEffectDialog } from './ui/import-effect-dialog.js'
 import { WorkspaceFilesDialog } from './ui/workspace-files-dialog.js'
 import { shareModal } from './ui/share-modal.js'
-import { loadFromCode, getCodeFromUrl, attachShareFiles } from './sharingLoader.js'
+import { loadFromCode, getCodeFromUrl, attachShareFiles, loadImageTools } from './sharingLoader.js'
+import { mayHaveInlineImages, takeInlineImages } from './inlineImages.js'
 import { bootstrapAgent, markAgentReady, createSeanceAgentRelay } from './agent/index.js'
 import { createOnlineCollaboration } from './onlineCollaboration.js'
 // A namespace import: an older handfish without the connect-agent dialog
@@ -1320,6 +1321,21 @@ async function init() {
             debouncedSave()
         })
 
+        // Editor state saved before this kept an inline image as text. The
+        // editor shows the program as it was; the stored copy is rewritten to
+        // name the image by its id, with its bytes among the workspace images,
+        // saved to IndexedDB. The startup compile may already hold them, before
+        // the autosave above was listening, so save the workspace here.
+        if (mayHaveInlineImages(uiState.dsl)) {
+            try {
+                saveUIState({ dsl: await storedProgram(uiState.dsl) })
+                unsavedChanges = true
+                debouncedSave()
+            } catch (error) {
+                console.warn('[UIState] The saved editor program holds an inline image that could not be read:', error)
+            }
+        }
+
         // The DSL editor persists to localStorage on its own, slower timer.
         // Track it as pending so the flush below covers it too — otherwise
         // closing the tab mid-edit loses the last thing typed, while the
@@ -1331,18 +1347,36 @@ async function init() {
         // newer content. Read the editor at save time.
         let uiStateDirty = false
         let uiStateTimeout = null
+        // Numbers each save, so one that waits for an inline image never
+        // writes over a later one.
+        let uiStateSave = 0
+        const writeUIState = (dsl, save) => {
+            if (save !== uiStateSave) return
+            // saveUIState reports a refused write (quota, storage off) by
+            // returning false rather than throwing. Keep it pending so the next
+            // flush retries, instead of dropping the edit the way the workspace
+            // path used to.
+            if (saveUIState({ dsl }) === false) {
+                uiStateDirty = true
+            }
+        }
         const saveUIStateNow = () => {
             if (!uiStateDirty || !dslEditor) return
             clearTimeout(uiStateTimeout)
             uiStateTimeout = null
             uiStateDirty = false
-            // saveUIState reports a refused write (quota, storage off) by
-            // returning false rather than throwing. Keep it pending so the next
-            // flush retries, instead of dropping the edit the way the workspace
-            // path used to.
-            if (saveUIState({ dsl: dslEditor.value }) === false) {
-                uiStateDirty = true
+            const save = ++uiStateSave
+            const dsl = dslEditor.value
+            if (!mayHaveInlineImages(dsl)) {
+                writeUIState(dsl, save)
+                return
             }
+            // localStorage keeps no image as text: an image the program
+            // carries inline is saved as image:<sha256>, and its bytes go to
+            // IndexedDB with the workspace images.
+            storedProgram(dsl).then(stored => writeUIState(stored, save), error => {
+                console.warn('[UIState] The editor program was not saved: it holds an inline image that could not be read:', error)
+            })
         }
 
         // Durability: flush every pending save immediately when the tab is
@@ -2234,6 +2268,30 @@ function setProgramText(dsl) {
 /** The image records the program can name: the renderer's and the workspace's. */
 function heldImages() {
     return [...new Map([...renderer.images, ...workspaceStore.images].map(image => [image.id, image])).values()]
+}
+
+/**
+ * Hold image records beside the program's own, in the renderer and in the
+ * workspace, once each.
+ */
+function holdImages(records) {
+    const missing = held => records.filter(image => !held.some(heldImage => heldImage.id === image.id))
+    const forRenderer = missing(renderer.images)
+    const forWorkspace = missing(workspaceStore.images)
+    if (forRenderer.length) renderer.images = [...renderer.images, ...forRenderer]
+    if (forWorkspace.length) workspaceStore.images = [...workspaceStore.images, ...forWorkspace]
+}
+
+/**
+ * The program as saved editor state keeps it: each image it carries inline is
+ * named by its id, and held as a Blob record with the program's images.
+ * @param {string} dsl
+ * @returns {Promise<string>}
+ */
+async function storedProgram(dsl) {
+    const stored = await takeInlineImages(dsl, await loadImageTools())
+    holdImages(stored.images)
+    return stored.dsl
 }
 
 /** Keep image records that arrived from the session beside the program's own. */
