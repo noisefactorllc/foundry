@@ -111,8 +111,8 @@ export class SavedEffects {
             actions.className = 'effect-actions'
 
             const loadBtn = document.createElement('button')
-            loadBtn.className = 'action-btn small'
-            loadBtn.title = 'Load'
+            loadBtn.className = 'action-btn small tooltip'
+            loadBtn.dataset.title = 'Load'
             loadBtn.innerHTML = '<span class="icon-material">folder_open</span>'
             loadBtn.addEventListener('click', (e) => {
                 e.stopPropagation()
@@ -120,8 +120,8 @@ export class SavedEffects {
             })
 
             const deleteBtn = document.createElement('button')
-            deleteBtn.className = 'action-btn small danger'
-            deleteBtn.title = 'Delete'
+            deleteBtn.className = 'action-btn small danger tooltip'
+            deleteBtn.dataset.title = 'Delete'
             deleteBtn.innerHTML = '<span class="icon-material">delete</span>'
             deleteBtn.addEventListener('click', (e) => {
                 e.stopPropagation()

@@ -535,7 +535,8 @@ class EffectControls extends HTMLElement {
         const infoBtn = document.createElement('button')
         infoBtn.className = 'ec-action-btn'
         infoBtn.type = 'button'
-        infoBtn.title = 'effect help'
+        infoBtn.classList.add('tooltip')
+        infoBtn.dataset.title = 'effect help'
         infoBtn.textContent = 'info'
         infoBtn.addEventListener('click', (e) => {
             e.stopPropagation()
@@ -546,7 +547,8 @@ class EffectControls extends HTMLElement {
         const closeBtn = document.createElement('button')
         closeBtn.className = 'ec-action-btn'
         closeBtn.type = 'button'
-        closeBtn.title = 'close'
+        closeBtn.classList.add('tooltip')
+        closeBtn.dataset.title = 'close'
         closeBtn.textContent = 'close'
         closeBtn.addEventListener('click', (e) => {
             e.stopPropagation()
@@ -641,7 +643,10 @@ class EffectControls extends HTMLElement {
         const label = document.createElement('span')
         label.className = 'ec-control-label'
         label.textContent = spec.ui?.label || paramName
-        if (spec.ui?.hint) label.title = spec.ui.hint
+        if (spec.ui?.hint) {
+            label.classList.add('tooltip')
+            label.dataset.title = spec.ui.hint
+        }
         group.appendChild(label)
 
         const value = this._readValue(paramName, spec)

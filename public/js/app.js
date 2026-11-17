@@ -757,7 +757,8 @@ function showCompilerError(errorText) {
     }
     
     compilerErrorEl.innerHTML = `<span>${escapeHtml(displayError)}</span>`
-    compilerErrorEl.title = errorText
+    compilerErrorEl.dataset.title = errorText
+    compilerErrorEl.classList.add('tooltip')
     compilerErrorEl.classList.add('visible')
 }
 
@@ -1051,6 +1052,8 @@ saveEffectOverlayBtn?.addEventListener('click', async () => {
 // =========================================================================
 
 async function init() {
+    // Every hover tooltip is a Handfish tooltip: .tooltip with data-title.
+    handfish.initializeTooltips()
     try {
         updateLoadingStatus('Loading fonts')
         
@@ -1533,13 +1536,6 @@ const menuBarEl = document.getElementById('menu')
 
 function refreshMenuBar() {
     menuBarEl?.refresh?.()
-    // Native browser tooltips, exactly as the original buttons had: mirror the
-    // component's data-title onto title (Foundry loads no tooltip layer).
-    if (menuBarEl) {
-        for (const el of menuBarEl.querySelectorAll('[data-title]')) {
-            if (el.title !== el.dataset.title) el.title = el.dataset.title
-        }
-    }
 }
 
 // Whether "connect agent..." can help in the current session; set once online

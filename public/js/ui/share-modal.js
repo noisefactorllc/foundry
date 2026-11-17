@@ -434,7 +434,7 @@ export class ShareModal {
                         </div>
                         <div class="share-url-field">
                             <input type="text" id="share-url" readonly>
-                            <button id="share-copy-btn" class="action-btn small" title="Copy URL">
+                            <button id="share-copy-btn" class="action-btn small tooltip" data-title="Copy URL">
                                 <span class="icon-material">content_copy</span>
                             </button>
                         </div>
