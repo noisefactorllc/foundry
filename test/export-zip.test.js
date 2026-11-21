@@ -148,3 +148,21 @@ test('export omits dsl.txt and skips whitespace-only programs', { timeout: 3000 
     assert.equal(zip.entries.has('dsl.txt'), false)
     assert.equal(zip.entries.has('effect.dsl'), false)
 })
+
+test('export preserves malformed definitions and nested shader files byte-for-byte', { timeout: 3000 }, async () => {
+    const files = {
+        'definition.json': '{"name": unfinished',
+        'glsl/main.frag': '#version 300 es\nvoid main() { }\n',
+        'wgsl/nested/main.wgsl': '@fragment fn main() -> @location(0) vec4f { return vec4f(1); }\n',
+    }
+    const zip = await runExport({ files, dsl: PROGRAM })
+    for (const [path, content] of Object.entries(files)) assert.equal(zip.entries.get(path), content)
+    assert.equal(zip.entries.get('effect.dsl'), PROGRAM)
+    assert.deepEqual([...zip.entries.keys()].sort(), [...Object.keys(files), 'effect.dsl'].sort())
+})
+
+test('an unnamed workspace uses the fallback download name', { timeout: 3000 }, async () => {
+    const run = await exportRun({ files: {}, dsl: PROGRAM, name: '' })
+    assert.deepEqual(run.downloads, ['effect-workspace.zip'])
+    assert.deepEqual(run.outcome, { success: true, name: 'effect-workspace' })
+})

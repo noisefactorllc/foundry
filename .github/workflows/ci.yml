@@ -2,18 +2,6 @@ name: ci
 
 on:
   pull_request:
-    paths:
-      - '**'
-      - '!*.md'
-      - '!*.rst'
-      - '!*.adoc'
-      - '!docs/**'
-      - '!LICENSE*'
-      - '!.github/ISSUE_TEMPLATE/**'
-      - '!.github/PULL_REQUEST_TEMPLATE*'
-      - '!.github/dependabot.yml'
-      - '!.github/dependabot.yaml'
-      - '!.editorconfig'
   push:
     branches: [main, preview]
   workflow_dispatch:
@@ -24,6 +12,7 @@ permissions:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       # Audit-mode egress monitoring: records every outbound connection the
       # runner makes so exfil/C2 from a compromised dependency is detectable.
@@ -71,21 +60,9 @@ jobs:
           fi
 
       - name: Unit tests
-        run: |
-          if jq -e '.scripts.test' package.json >/dev/null 2>&1; then
-            test_cmd=$(jq -r '.scripts.test' package.json)
-            if [ "$test_cmd" = 'echo "Error: no test specified" && exit 1' ]; then
-              echo "Placeholder test script — skipping"
-            elif echo "$test_cmd" | grep -qiE '(playwright|test-e2e)'; then
-              echo "E2E tests require browser/server — skipping in install CI"
-            else
-              npm test
-            fi
-          else
-            echo "No test script — skipping"
-          fi
+        run: node --test --test-reporter=./scripts/test-reporter.mjs test/*.test.js
 
       - name: Browser release smoke
         run: |
           node node_modules/playwright/cli.js install --with-deps chromium
-          npm run test:smoke
+          node --test --test-reporter=./scripts/test-reporter.mjs test/release-smoke.spec.js
