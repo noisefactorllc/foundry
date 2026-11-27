@@ -9,9 +9,12 @@
 import { toast } from './toast.js'
 import { workspaceStore } from '../workspace/index.js'
 import { escapeHtml } from '../utils/html.js'
-import { attachShareFiles } from '../sharingLoader.js'
+import { attachShareFiles, shareCarriesImages } from '../sharingLoader.js'
+import { shareExposureText } from './share-exposure.js'
 
 const SHARE_API_URL = 'https://sharing.noisedeck.app/api/embed/shorten'
+// The program state events after which the program a share sends can differ.
+const PROGRAM_EVENTS = ['change', 'stepchange', 'load', 'structurechange']
 
 /**
  * ShareModal class
@@ -67,6 +70,39 @@ export class ShareModal {
 
         this.isOpen = true
 
+        // The sentence follows the program and the workspace while the dialog
+        // is open, and keeps what a running share carries until it ends. The
+        // program's events update the images; the workspace's notices, and a
+        // 250 ms check for workspace writes that send no notice, update the
+        // custom shader code. A dialog that is removed without a close stops
+        // following too.
+        this._kinds = this._shareKinds()
+        this._showExposure(this._kinds)
+        const modal = this.modal
+        const stops = []
+        const stopFollowing = () => { for (const stop of stops.splice(0)) stop() }
+        this._stopFollowing = stopFollowing
+        const follow = fromProgram => () => {
+            if (this.modal !== modal || !modal.isConnected) return stopFollowing()
+            if (!this.isOpen || this.isSharing) return
+            this._kinds = fromProgram
+                ? { ...this._kinds, images: shareCarriesImages(this._shareDsl()) }
+                : { ...this._kinds, shaders: this._carriesEffect(workspaceStore.toObject()) }
+            this._showExposure(this._kinds)
+        }
+        const followProgram = follow(true)
+        const followWorkspace = follow(false)
+        stops.push(workspaceStore.onChange(followWorkspace))
+        const programState = this.options?.renderer?.programState
+        if (programState?.on) {
+            for (const event of PROGRAM_EVENTS) programState.on(event, followProgram)
+            stops.push(() => {
+                for (const event of PROGRAM_EVENTS) programState.off?.(event, followProgram)
+            })
+        }
+        const timer = setInterval(followWorkspace, 250)
+        stops.push(() => clearInterval(timer))
+
         // Close on escape
         this._escHandler = (e) => {
             if (e.key === 'Escape' && !this.isSharing) this.close()
@@ -87,6 +123,9 @@ export class ShareModal {
     close() {
         if (!this.isOpen || this.isSharing) return
 
+        this._stopFollowing?.()
+        this._stopFollowing = null
+
         this.modal.classList.remove('modal-visible')
         setTimeout(() => {
             this.modal.remove()
@@ -95,6 +134,52 @@ export class ShareModal {
 
         this.isOpen = false
         document.removeEventListener('keydown', this._escHandler)
+    }
+
+    /**
+     * The program a share sends: the renderer's program with its current
+     * parameter values, or the editor text from when the dialog opened.
+     * @private
+     * @param {boolean} [forShare] - Log the choice, as a share does
+     * @returns {string}
+     */
+    _shareDsl(forShare = false) {
+        const renderer = this.options?.renderer
+        if (renderer?.programState?.toDsl) {
+            try {
+                const dslWithParams = renderer.programState.toDsl()
+                if (dslWithParams && dslWithParams.trim()) {
+                    if (forShare) console.log('[ShareModal] Using DSL with current params from programState')
+                    return dslWithParams
+                }
+            } catch (err) {
+                if (forShare) console.warn('[ShareModal] Failed to get DSL from programState:', err)
+            }
+        }
+        return this.options?.dsl || ''
+    }
+
+    /**
+     * What a share carries besides the program, decided as the share decides
+     * it: the original images only when the program names a url, and custom
+     * shader code only when the workspace holds an effect the share packages.
+     * @private
+     * @param {string} [dsl] - The program the share sends
+     * @returns {{images: boolean, shaders: boolean}}
+     */
+    _shareKinds(dsl = this._shareDsl()) {
+        return { images: shareCarriesImages(dsl), shaders: this._carriesEffect(workspaceStore.toObject()) }
+    }
+
+    /**
+     * @private
+     * @param {{images: boolean, shaders: boolean}} kinds
+     */
+    _showExposure(kinds) {
+        // Only a changed sentence is written, so a selection in it survives each check.
+        const exposure = this.modal?.querySelector('#share-exposure')
+        const text = shareExposureText(kinds)
+        if (exposure && exposure.textContent !== text) exposure.textContent = text
     }
 
     /**
@@ -113,7 +198,7 @@ export class ShareModal {
         // Same contents the "edit in ..." handlers package: an effect that
         // carries only WGSL shaders, or carries help.md, must still travel in
         // the share.
-        if (!defJson || (glslFiles.length === 0 && wgslFiles.length === 0)) {
+        if (!this._carriesEffect(files)) {
             console.log('[ShareModal] No complete effect to package')
             return null
         }
@@ -153,6 +238,19 @@ export class ShareModal {
             console.error('[ShareModal] Failed to create ZIP:', error)
             return null
         }
+    }
+
+    /**
+     * Whether the workspace holds an effect a share packages: a
+     * definition.json with GLSL or WGSL shaders. The Share sentence names
+     * custom shader code by the same test.
+     * @private
+     * @param {Object<string, string>} files - The workspace files
+     * @returns {boolean}
+     */
+    _carriesEffect(files) {
+        const shaders = Object.keys(files).some(p => (p.startsWith('glsl/') && p.endsWith('.glsl')) || (p.startsWith('wgsl/') && p.endsWith('.wgsl')))
+        return Boolean(files['definition.json']) && shaders
     }
 
     /**
@@ -249,21 +347,8 @@ export class ShareModal {
         const description = descInput?.value.trim() || ''
         
         // Get DSL with current parameter values
-        let dsl = this.options?.dsl || ''
+        const dsl = this._shareDsl(true)
         const renderer = this.options?.renderer
-        
-        // Try to get DSL with current param values from ShadeRenderer's programState
-        if (renderer?.programState?.toDsl) {
-            try {
-                const dslWithParams = renderer.programState.toDsl()
-                if (dslWithParams && dslWithParams.trim()) {
-                    dsl = dslWithParams
-                    console.log('[ShareModal] Using DSL with current params from programState')
-                }
-            } catch (err) {
-                console.warn('[ShareModal] Failed to get DSL from programState:', err)
-            }
-        }
 
         if (!dsl) {
             toast.error('No DSL program to share')
@@ -273,6 +358,10 @@ export class ShareModal {
         this.isSharing = true
         shareBtn.disabled = true
         shareBtn.innerHTML = '<span class="loading-spinner"></span> Sharing...'
+
+        // What this share carries, read at the click: the sentence keeps it
+        // while the share runs.
+        this._showExposure(this._shareKinds(dsl))
 
         try {
             // Prepare the request
@@ -323,6 +412,8 @@ export class ShareModal {
             toast.error(`Share failed: ${error.message}`)
             shareBtn.disabled = false
             shareBtn.innerHTML = '<span class="icon-material">share</span> Share'
+            this._kinds = this._shareKinds()
+            this._showExposure(this._kinds)
         } finally {
             this.isSharing = false
         }
@@ -418,7 +509,7 @@ export class ShareModal {
                         </div>
                         <div class="share-info">
                             <span class="icon-material">info</span>
-                            <span>Your effect will be shared to sharing.noisedeck.app and accessible for 90 days.</span>
+                            <span id="share-exposure">${shareExposureText()}</span>
                         </div>
                         <div class="share-actions">
                             <button id="share-submit-btn" class="action-btn primary">

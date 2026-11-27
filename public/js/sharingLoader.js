@@ -266,6 +266,16 @@ export async function uploadScreenshot(canvas) {
 }
 
 /**
+ * Whether a share of this program uploads the original images: only when the
+ * program text names a url. attachShareFiles uploads none otherwise.
+ * @param {string} dsl - The program the share sends
+ * @returns {boolean}
+ */
+export function shareCarriesImages(dsl) {
+    return /\burl\b/.test(dsl)
+}
+
+/**
  * Send a share payload's images and screenshot to the sharing service as
  * files. Each image the program uses is uploaded with POST /api/images and
  * named in `payload.dsl` by the id the service returns; the screenshot is
@@ -278,7 +288,7 @@ export async function uploadScreenshot(canvas) {
  * @returns {Promise<object>} The payload
  */
 export async function attachShareFiles(payload, { images = [], screenshot = null } = {}) {
-    if (/\burl\b/.test(payload.dsl)) {
+    if (shareCarriesImages(payload.dsl)) {
         const tools = await loadImageTools()
         // Every prepared image holds its bytes as a Blob, including one the
         // program carries inline.
